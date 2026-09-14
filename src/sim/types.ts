@@ -154,6 +154,10 @@ export interface Post {
   spreadRate?: number;
   /** Zufaelliges Glueck dieses Posts - der unberechenbare Rest des Algorithmus. */
   luck: number;
+  /** Zahlen-Seed fuer die Engine (schneller als Hashing der Id). */
+  seedNum: number;
+  /** Ausgespielt und abgeschlossen - wird nicht mehr berechnet. */
+  done?: boolean;
   /** Letzte Verarbeitung durch die Engine. */
   lastTick: number;
   /** Vom Nutzer erstellt? */
@@ -295,6 +299,11 @@ export interface World {
   accounts: Record<string, Account>;
   posts: Record<string, Post>;
   order: string[];
+  /**
+   * Beitraege, die der Algorithmus gerade noch ausspielt. Nur diese werden
+   * pro Schritt berechnet - ohne das waechst der Aufwand mit jedem Tag.
+   */
+  active: string[];
   notifications: AppNotification[];
   threads: Record<string, DmThread>;
   threadOrder: string[];

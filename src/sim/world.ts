@@ -9,7 +9,9 @@ export const WORLD_VERSION = 1;
 /** Startzeitpunkt der Simulation in Minuten (entspricht Tag 60). */
 const START_TIME = 60 * 24 * 60;
 /** Tage Vorgeschichte, die beim Erstellen der Welt durchgerechnet werden. */
-const BOOTSTRAP_DAYS = 14;
+const BOOTSTRAP_DAYS = 7;
+/** Simulationszeit pro Rechenhaeppchen (Minuten). */
+const CHUNK_MINUTES = 6 * 60;
 export const DEFAULT_POPULATION = 12_000_000;
 
 export interface UserProfile {
@@ -25,8 +27,21 @@ export interface WorldOptions {
   bootstrapDays?: number;
 }
 
-/** Erzeugt eine komplette, bereits belebte Welt. */
-export function createWorld(seed: number, profile: UserProfile, options: WorldOptions = {}): World {
+/**
+ * Schrittweiser Weltaufbau. Die Vorgeschichte wird in Haeppchen gerechnet,
+ * damit die Oberflaeche zwischendurch zeichnen kann und der Browser nicht
+ * minutenlang blockiert wirkt.
+ */
+export interface WorldBuild {
+  world: World;
+  /** Fortschritt 0..1. */
+  progress: number;
+  done: boolean;
+  /** Rechnet das naechste Haeppchen. */
+  step(): void;
+}
+
+export function beginWorld(seed: number, profile: UserProfile, options: WorldOptions = {}): WorldBuild {
   const rng = makeRng(seed);
   const accountCount = options.accounts ?? 220;
   const bootstrapDays = options.bootstrapDays ?? BOOTSTRAP_DAYS;
@@ -39,6 +54,7 @@ export function createWorld(seed: number, profile: UserProfile, options: WorldOp
     accounts: {},
     posts: {},
     order: [],
+    active: [],
     notifications: [],
     threads: {},
     threadOrder: [],
@@ -74,11 +90,8 @@ export function createWorld(seed: number, profile: UserProfile, options: WorldOp
   world.user.accountId = user.id;
 
   rebuildIndex(world);
-
-  // --- Beziehungsnetz zwischen den KI-Accounts ---
   seedFollowGraph(world, rng);
 
-  // --- Startende Trends ---
   for (let i = 0; i < 4; i++) {
     world.trends.push({
       tag: pick(rng, NICHES[pick(rng, NICHE_IDS)].hashtags),
@@ -90,20 +103,48 @@ export function createWorld(seed: number, profile: UserProfile, options: WorldOp
     });
   }
 
-  // --- Vorgeschichte simulieren: die Welt hat schon vor dir existiert ---
-  const quietDays = Math.max(0, bootstrapDays - 2);
-  tick(world, quietDays * 1440, { sample: false, notify: false });
-  tick(world, Math.min(2, bootstrapDays) * 1440, { sample: true, notify: false });
+  const totalMinutes = bootstrapDays * 1440;
+  // Die letzten zwei Tage mit Details (namentliche Likes und Kommentare).
+  const detailedFrom = totalMinutes - Math.min(2, bootstrapDays) * 1440;
+  let elapsed = 0;
 
+  const build: WorldBuild = {
+    world,
+    progress: totalMinutes > 0 ? 0 : 1,
+    done: totalMinutes === 0,
+    step() {
+      if (build.done) return;
+      const chunk = Math.min(CHUNK_MINUTES, totalMinutes - elapsed);
+      const detailed = elapsed >= detailedFrom;
+      // Die frueheren Tage werden grob gerechnet, die letzten zwei genau.
+      tick(world, chunk, { sample: detailed, notify: false, maxStep: detailed ? 30 : 60 });
+      elapsed += chunk;
+      build.progress = elapsed / totalMinutes;
+      if (elapsed >= totalMinutes) build.done = true;
+      if (build.done) finishWorld(world);
+    },
+  };
+
+  if (build.done) finishWorld(world);
+  return build;
+}
+
+/** Letzte Schritte, wenn die Vorgeschichte durchgerechnet ist. */
+function finishWorld(world: World) {
   // Aufmerksamkeitsmarkt am fertigen Startzustand kalibrieren, damit jede
   // Welt mit fairen Bedingungen beginnt.
   world.settings.attentionCapacity = Math.max(1, world.attention.rate) * ATTENTION_HEADROOM;
-
   world.notifications = [];
   world.log = [];
   world.time = START_TIME;
   world.realTime = Date.now();
-  return world;
+}
+
+/** Erzeugt eine komplette, bereits belebte Welt in einem Rutsch. */
+export function createWorld(seed: number, profile: UserProfile, options: WorldOptions = {}): World {
+  const build = beginWorld(seed, profile, options);
+  while (!build.done) build.step();
+  return build.world;
 }
 
 function makeAiAccount(world: World, rng: Rng, index: number, taken: Set<string>): Account {

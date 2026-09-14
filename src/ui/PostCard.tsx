@@ -151,7 +151,7 @@ export default function PostCard({ post, world, onProfile, onOpen, onTag }: Prop
 }
 
 /** Kompakte Vorschau fuer Raster-Ansichten. */
-export function GridTile({ post, onOpen, size = 220 }: { post: Post; onOpen: (id: string) => void; size?: number }) {
+export function GridTile({ post, onOpen, size = 180 }: { post: Post; onOpen: (id: string) => void; size?: number }) {
   return (
     <button className="grid-item" onClick={() => onOpen(post.id)}>
       <PostImage seed={post.imageSeed} niche={post.niche} style={post.style} size={size} />

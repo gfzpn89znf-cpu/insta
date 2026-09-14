@@ -86,18 +86,52 @@ export function PostImage({
   seed,
   niche,
   style,
-  size = 560,
+  size = 480,
+  eager = false,
 }: {
   seed: number;
   niche: NicheId;
   style: StyleId;
   size?: number;
+  /** Sofort zeichnen statt erst beim Sichtbarwerden. */
+  eager?: boolean;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
+  const drawn = useRef('');
+
   useEffect(() => {
-    if (ref.current) drawPostImage(ref.current, { seed, niche, style });
-  }, [seed, niche, style, size]);
-  return <canvas ref={ref} width={size} height={size} />;
+    const canvas = ref.current;
+    if (!canvas) return;
+    const key = `${seed}|${niche}|${style}|${size}`;
+
+    const paint = () => {
+      if (drawn.current === key || !ref.current) return;
+      drawn.current = key;
+      drawPostImage(ref.current, { seed, niche, style });
+    };
+
+    // Ein Feed zeigt Dutzende Bilder. Sie alle sofort zu zeichnen kostet auf
+    // langsamen Geraeten Sekunden - also erst, wenn sie in die Naehe des
+    // Sichtbereichs kommen.
+    if (eager || typeof IntersectionObserver === 'undefined') {
+      paint();
+      return;
+    }
+    drawn.current = '';
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          paint();
+          observer.disconnect();
+        }
+      },
+      { rootMargin: '300px 0px' },
+    );
+    observer.observe(canvas);
+    return () => observer.disconnect();
+  }, [seed, niche, style, size, eager]);
+
+  return <canvas ref={ref} width={size} height={size} style={{ background: 'var(--surface-2)' }} />;
 }
 
 /* ---------------- Modal ---------------- */

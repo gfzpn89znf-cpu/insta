@@ -1,6 +1,6 @@
 import { generateComment, formatShort } from './content';
 import { NICHES, getTopic } from './niches';
-import { chance, clamp, gauss, pick, randInt, rngFrom, stochasticRound, type Rng } from './rng';
+import { chance, clamp, gauss, makeRng, mixSeed, pick, randInt, rngFrom, seedOf, stochasticRound, type Rng } from './rng';
 import { createAiPost } from './posts';
 import { processDms } from './dms';
 import { followerCount } from './scoring';
@@ -34,6 +34,11 @@ export interface TickOptions {
   sample?: boolean;
   /** Benachrichtigungen fuer den Nutzer erzeugen. */
   notify?: boolean;
+  /**
+   * Groesse der internen Rechenschritte in Minuten. Kleiner ist genauer,
+   * groesser ist schneller - fuer die Vorgeschichte reicht grob.
+   */
+  maxStep?: number;
 }
 
 /**
@@ -44,9 +49,10 @@ export interface TickOptions {
 export function tick(world: World, dt: number, opts: TickOptions = {}) {
   const sample = opts.sample !== false;
   const notify = opts.notify !== false;
+  const maxStep = opts.maxStep ?? 30;
   let remaining = Math.max(0, dt);
   while (remaining > 0) {
-    const step = Math.min(30, remaining);
+    const step = Math.min(maxStep, remaining);
     stepWorld(world, step, sample, notify);
     remaining -= step;
   }
@@ -69,15 +75,18 @@ function stepWorld(world: World, dt: number, sample: boolean, notify: boolean) {
     }
   }
 
-  // 2. Reichweite und Engagement aller aktiven Posts
-  for (const postId of world.order) {
+  // 2. Reichweite und Engagement der Beitraege, die noch ausgespielt werden
+  let write = 0;
+  for (let i = 0; i < world.active.length; i++) {
+    const postId = world.active[i];
     const post = world.posts[postId];
     if (!post) continue;
     const age = world.time - post.createdAt;
-    if (age > ACTIVE_WINDOW + dt) break; // order ist nach Zeit sortiert
-    if (age < 0) continue;
-    advancePost(world, post, dt, sample, notify);
+    if (age > ACTIVE_WINDOW || post.done) continue; // faellt aus der Liste
+    if (age >= 0) advancePost(world, post, dt, sample, notify);
+    world.active[write++] = postId;
   }
+  world.active.length = write;
 
   // 3. Beziehungen, Abwanderung, Meilensteine
   socialStep(world, dt, notify);
@@ -101,7 +110,7 @@ function stepWorld(world: World, dt: number, sample: boolean, notify: boolean) {
 /** Circadianer Rhythmus - nachts wird selten gepostet. */
 function isAwake(acc: Account, time: number): boolean {
   const hour = (time / 60) % 24;
-  if (hour >= 1 && hour < 6) return chance(rngFrom(acc.id, Math.floor(time / 60)), 0.06);
+  if (hour >= 1 && hour < 6) return chance(makeRng(mixSeed(seedOf(acc.id), Math.floor(time / 60))), 0.06);
   return true;
 }
 
@@ -137,7 +146,7 @@ export function profileAppeal(world: World, acc: Account): number {
 export function advancePost(world: World, post: Post, dt: number, sample = true, notify = true) {
   const author = world.accounts[post.authorId];
   if (!author) return;
-  const rng = rngFrom(world.seed, post.id, Math.floor(world.time));
+  const rng = makeRng(mixSeed(post.seedNum, Math.floor(world.time)));
   const ageNow = world.time - post.createdAt;
   const agePrev = Math.max(0, ageNow - dt);
   const followers = followerCount(author);
@@ -202,8 +211,11 @@ export function advancePost(world: World, post: Post, dt: number, sample = true,
   imprExplore *= market;
   post.spreadRate = Math.max(0, imprExplore / hours);
 
-  if (imprFollowers <= 0 && imprExplore <= 0) {
+  if (imprFollowers + imprExplore < 0.3) {
     post.lastTick = world.time;
+    // Der Algorithmus hat das Thema durch: nichts kommt mehr nach, also
+    // muss dieser Beitrag auch nicht weiter berechnet werden.
+    if (ageNow > 6 * 60) post.done = true;
     return;
   }
 
@@ -282,7 +294,7 @@ export function advancePost(world: World, post: Post, dt: number, sample = true,
 /** Followerzahl veraendern - echte Accounts bleiben erhalten, die Masse skaliert. */
 function applyFollowerDelta(world: World, acc: Account, delta: number) {
   if (delta === 0) return;
-  const rng = rngFrom(acc.id, Math.floor(world.time), 'delta');
+  const rng = makeRng(mixSeed(seedOf(acc.id), Math.floor(world.time)));
   const whole = stochasticRound(rng, Math.abs(delta));
   if (whole === 0) return;
   if (delta > 0) {
@@ -482,13 +494,16 @@ function socialStep(world: World, dt: number, notify: boolean) {
     if (followers > 30) {
       // Grosse Accounts verlieren anteilig mehr: Karteileichen und Abo-Aufraeumen.
       const sizeChurn = BASE_CHURN_PER_DAY * (1 + clamp(Math.log10(followers / 1000) / 3, 0, 1) * 1.6);
-      const lost = stochasticRound(rngFrom(acc.id, Math.floor(world.time), 'churn'), followers * sizeChurn * (dt / 1440));
+      const lost = stochasticRound(
+        makeRng(mixSeed(seedOf(acc.id), Math.floor(world.time) + 7)),
+        followers * sizeChurn * (dt / 1440),
+      );
       acc.crowdFollowers = Math.max(0, acc.crowdFollowers - lost);
     }
     if (daysSincePost > 3 && followers > 50) {
       // Wer nicht postet, verliert langsam an Bindung.
       const churn = stochasticRound(
-        rngFrom(acc.id, Math.floor(world.time), 'idle'),
+        makeRng(mixSeed(seedOf(acc.id), Math.floor(world.time) + 13)),
         followers * 0.0012 * (dt / 1440) * Math.min(4, daysSincePost - 2),
       );
       acc.crowdFollowers = Math.max(0, acc.crowdFollowers - churn);
@@ -608,6 +623,7 @@ function prune(world: World) {
 
   // Verweise des Nutzers auf geloeschte Beitraege mit aufraeumen.
   const alive = new Set(keep);
+  world.active = world.active.filter((id) => alive.has(id));
   world.user.savedPosts = world.user.savedPosts.filter((id) => alive.has(id));
   world.user.likedPosts = world.user.likedPosts.filter((id) => alive.has(id));
   world.user.commentedPosts = world.user.commentedPosts.filter((id) => alive.has(id));

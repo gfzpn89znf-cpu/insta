@@ -27,7 +27,7 @@ export function saveWorld(world: World): boolean {
     // Zweiter Versuch mit reduziertem Umfang: fremde Beitraege aelter als
     // zwei Tage fliegen raus, eigene bleiben vollstaendig erhalten.
     try {
-      const slim = slimDown(payload as World);
+        const slim = slimDown(payload as World);
       localStorage.setItem(KEY, JSON.stringify(slim));
       listener?.(true, 'Spielstand wurde verkleinert gespeichert.');
       return true;
@@ -71,12 +71,22 @@ export function loadWorld(): World | null {
     world.log ??= [];
     world.threadOrder ??= [];
     world.threads ??= {};
+    rebuildActive(world);
     rebuildIndex(world);
     return world;
   } catch (err) {
     console.warn('Laden fehlgeschlagen', err);
     return null;
   }
+}
+
+/** Stellt die Liste der noch ausgespielten Beitraege wieder her. */
+function rebuildActive(world: World) {
+  const ACTIVE_WINDOW = 72 * 60;
+  world.active = world.order.filter((id) => {
+    const p = world.posts[id];
+    return p && !p.done && world.time - p.createdAt <= ACTIVE_WINDOW;
+  });
 }
 
 export function clearWorld() {

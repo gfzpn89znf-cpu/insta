@@ -17,9 +17,10 @@ npm run dev      # Entwicklungsserver auf http://localhost:5173
 ```
 
 ```bash
-npm run build    # Produktionsbuild nach dist/
-npm run preview  # Build lokal ausliefern
-npm test         # 30 Tests zur Simulationslogik
+npm run build         # Produktionsbuild nach dist/
+npm run preview       # Build lokal ausliefern
+npm test              # 30 Tests zur Simulationslogik
+npm run build:single  # alles in eine eigenstaendige HTML-Datei buendeln
 ```
 
 ## Was die App kann
@@ -116,15 +117,31 @@ src/
     feed.ts           Feed-, Explore- und Ranking-Algorithmen
     actions.ts        Nutzeraktionen mit ihren Konsequenzen
     image.ts          Prozedurale Bild- und Avatarerzeugung auf Canvas
-    world.ts          Welterzeugung inkl. 14 Tagen simulierter Vorgeschichte
+    world.ts          Welterzeugung inkl. simulierter Vorgeschichte, in Haeppchen
     store.ts          Echtzeitschleife und React-Anbindung
     persistence.ts    Speichern im Browser (mit Notfall-Verkleinerung)
   ui/                 Ansichten und Komponenten
 ```
 
-Eine neue Welt wird aus einem Seed erzeugt und anschließend 14 simulierte Tage
-lang durchgerechnet, bevor du sie betrittst – die Accounts haben also bereits
+Eine neue Welt wird aus einem Seed erzeugt und anschließend 7 simulierte Tage lang
+durchgerechnet, bevor du sie betrittst – die Accounts haben also bereits
 eine Geschichte, Follower und Beiträge, wenn du dich anmeldest.
+
+## Ladezeit
+
+Die App startet in unter einer Sekunde; danach rechnet sie die Vorgeschichte
+der Szene durch – auf einem schnellen Gerät knapp eine Sekunde, auf einem
+langsamen Telefon wenige Sekunden. Dafür sorgen drei Dinge:
+
+- Der Weltaufbau läuft in Häppchen von sechs Simulationsstunden, zwischen denen
+  der Browser zeichnen kann. Deshalb siehst du einen echten Fortschrittsbalken
+  statt einer eingefrorenen Seite.
+- Die Engine rechnet nur Beiträge weiter, die der Algorithmus noch ausspielt.
+  Ein Beitrag, bei dem nichts mehr nachkommt, wird abgeschlossen und fällt aus
+  der Schleife – das spart rund zwei Drittel der Rechenzeit.
+- Bilder werden erst gezeichnet, wenn sie in die Nähe des Sichtbereichs kommen,
+  und die Filmkörnung kommt aus einer einmal erzeugten Textur statt aus einer
+  Pixelschleife pro Bild.
 
 ## Spielstand
 

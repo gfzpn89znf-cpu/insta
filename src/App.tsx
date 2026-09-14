@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { hasSave } from './sim/persistence';
 import { resetWorld, resumeWorld, saveNow, setSaveListener, setSpeed, useWorld } from './sim/store';
 import type { Account, World } from './sim/types';
@@ -27,7 +27,9 @@ const SPEEDS = [
 
 export default function App() {
   const world = useWorld();
-  const [booted, setBooted] = useState(false);
+  const [booting, setBooting] = useState(() => hasSave());
+  const [bootProgress, setBootProgress] = useState(0);
+  const bootStarted = useRef(false);
   const [tab, setTab] = useState<Tab>('feed');
   const [profileId, setProfileId] = useState<string | null>(null);
   const [openPost, setOpenPost] = useState<string | null>(null);
@@ -37,13 +39,17 @@ export default function App() {
   const [toast, setToast] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
-  // Gespeicherten Stand automatisch fortsetzen.
+  // Gespeicherten Stand automatisch fortsetzen - in Haeppchen, damit die
+  // Anzeige mitlaeuft, wenn viel Zeit nachgeholt werden muss.
   useEffect(() => {
-    if (!booted) {
-      resumeWorld();
-      setBooted(true);
+    if (bootStarted.current) return;
+    bootStarted.current = true;
+    if (!hasSave()) {
+      setBooting(false);
+      return;
     }
-  }, [booted]);
+    void resumeWorld(setBootProgress).finally(() => setBooting(false));
+  }, []);
 
   useEffect(() => {
     setSaveListener((ok, message) => {
@@ -58,8 +64,20 @@ export default function App() {
     return () => window.clearTimeout(t);
   }, [toast]);
 
+  if (booting) {
+    return <BootScreen progress={bootProgress} />;
+  }
+
   if (!world) {
-    return <Onboarding canResume={hasSave()} onResume={() => resumeWorld()} />;
+    return (
+      <Onboarding
+        canResume={hasSave()}
+        onResume={() => {
+          setBooting(true);
+          void resumeWorld(setBootProgress).finally(() => setBooting(false));
+        }}
+      />
+    );
   }
 
   const user = world.accounts[world.user.accountId];
@@ -191,6 +209,21 @@ export default function App() {
       {settingsOpen && <Settings world={world} onClose={() => setSettingsOpen(false)} onToast={setToast} />}
 
       {toast && <div className="toast">{toast}</div>}
+    </div>
+  );
+}
+
+/** Ladeansicht, waehrend ein Spielstand geladen und aufgeholt wird. */
+function BootScreen({ progress }: { progress: number }) {
+  return (
+    <div className="onboard">
+      <div className="card onboard-card" style={{ padding: 26, textAlign: 'center' }}>
+        <div className="brand" style={{ padding: 0, fontSize: 32 }}>Fotogram</div>
+        <p className="muted small">Dein Spielstand wird geladen. Die Welt hat ohne dich weitergemacht.</p>
+        <div className="meter" style={{ marginTop: 14 }}>
+          <span style={{ width: `${Math.max(6, Math.round(progress * 100))}%` }} />
+        </div>
+      </div>
     </div>
   );
 }

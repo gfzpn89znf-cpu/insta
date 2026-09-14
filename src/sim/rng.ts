@@ -34,6 +34,26 @@ export function rngFrom(...parts: (string | number)[]): Rng {
   return makeRng(hashString(parts.join('|')));
 }
 
+const seedCache = new Map<string, number>();
+
+/**
+ * Zahlen-Seed zu einer Id, einmal berechnet und gemerkt.
+ * In den heissen Schleifen der Engine spart das Millionen String-Operationen.
+ */
+export function seedOf(id: string): number {
+  let v = seedCache.get(id);
+  if (v === undefined) {
+    v = hashString(id);
+    seedCache.set(id, v);
+  }
+  return v;
+}
+
+/** Schneller Seed aus zwei Zahlen - ohne Umweg ueber Zeichenketten. */
+export function mixSeed(a: number, b: number): number {
+  return (Math.imul(a ^ 0x9e3779b9, 2654435761) ^ Math.imul(b + 0x85ebca6b, 0x27d4eb2f)) >>> 0;
+}
+
 export function randInt(rng: Rng, min: number, max: number): number {
   return Math.floor(rng() * (max - min + 1)) + min;
 }

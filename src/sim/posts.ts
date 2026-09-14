@@ -62,6 +62,7 @@ export function createAiPost(world: World, account: Account): Post {
     commentList: [],
     energy: 1,
     luck: postLuck(rng),
+    seedNum: randInt(rng, 1, 2 ** 30),
     lastTick: world.time,
     byUser: false,
   };
@@ -95,6 +96,7 @@ export function createUserPost(world: World, draft: Draft): Post {
     collabId: draft.collabId,
     energy: 1,
     luck: postLuck(rng),
+    seedNum: randInt(rng, 1, 2 ** 30),
     lastTick: world.time,
     byUser: true,
     breakdown,
@@ -107,6 +109,7 @@ export function createUserPost(world: World, draft: Draft): Post {
 function registerPost(world: World, account: Account, post: Post) {
   world.posts[post.id] = post;
   world.order.unshift(post.id);
+  world.active.push(post.id);
   account.postIds.push(post.id);
   account.postsTotal += 1;
 

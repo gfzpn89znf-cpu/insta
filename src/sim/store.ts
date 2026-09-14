@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import { tick } from './engine';
 import { clearWorld, loadWorld, onSaveProblem, saveWorld, type SaveListener } from './persistence';
-import { createWorld, type UserProfile } from './world';
+import { beginWorld, type UserProfile } from './world';
 import type { World } from './types';
 
 /** Echtzeit-Intervall der Simulationsschleife. */
@@ -44,8 +44,33 @@ export function dispatch<T>(fn: (w: World) => T): T | undefined {
   return result;
 }
 
-export function startNewWorld(profile: UserProfile, seed = Math.floor(Math.random() * 1e9)) {
-  world = createWorld(seed, profile);
+export type Progress = (value: number) => void;
+
+/** Laesst den Browser zwischen zwei Rechenhaeppchen zeichnen. */
+function nextFrame(): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => resolve());
+    else setTimeout(resolve, 0);
+  });
+}
+
+/**
+ * Baut eine neue Welt auf. Die Vorgeschichte wird in Haeppchen gerechnet,
+ * damit die Fortschrittsanzeige laeuft und die Seite bedienbar bleibt.
+ */
+export async function startNewWorld(
+  profile: UserProfile,
+  seed = Math.floor(Math.random() * 1e9),
+  onProgress?: Progress,
+): Promise<World> {
+  const build = beginWorld(seed, profile);
+  onProgress?.(0);
+  while (!build.done) {
+    build.step();
+    onProgress?.(build.progress);
+    await nextFrame();
+  }
+  world = build.world;
   saveWorld(world);
   emit();
   startLoop();
@@ -53,16 +78,27 @@ export function startNewWorld(profile: UserProfile, seed = Math.floor(Math.rando
 }
 
 /** Laedt einen gespeicherten Stand und holt die verstrichene Zeit nach. */
-export function resumeWorld(): World | null {
+export async function resumeWorld(onProgress?: Progress): Promise<World | null> {
   const loaded = loadWorld();
   if (!loaded) return null;
   world = loaded;
   const elapsedRealMs = Math.max(0, Date.now() - (loaded.realTime ?? Date.now()));
   const simMinutes = Math.min(MAX_CATCHUP, (elapsedRealMs / 1000) * loaded.settings.speed);
+
+  // Waehrend der Abwesenheit lief die Welt weiter - auch das in Haeppchen,
+  // damit das Laden eines alten Spielstands nicht haengt.
   if (simMinutes > 1 && !loaded.settings.paused) {
-    // Waehrend der Abwesenheit lief die Welt weiter - inklusive Benachrichtigungen.
-    tick(world, simMinutes, { sample: true, notify: true });
+    const chunk = 6 * 60;
+    let done = 0;
+    while (done < simMinutes) {
+      const step = Math.min(chunk, simMinutes - done);
+      tick(world, step, { sample: true, notify: true });
+      done += step;
+      onProgress?.(done / simMinutes);
+      if (done < simMinutes) await nextFrame();
+    }
   }
+  onProgress?.(1);
   world.realTime = Date.now();
   emit();
   startLoop();

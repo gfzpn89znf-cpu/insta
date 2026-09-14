@@ -132,21 +132,49 @@ function applyStyle(ctx: CanvasRenderingContext2D, w: number, h: number, style: 
   ctx.fillStyle = vg;
   ctx.fillRect(0, 0, w, h);
 
-  // Filmkoernung
+  // Filmkoernung: einmal erzeugte Kachel, die ueber das Bild gelegt wird.
+  // Eine Pixelschleife pro Bild waere auf langsamen Geraeten die teuerste
+  // Operation der ganzen App.
   if (style.grain > 0.02) {
-    const step = 2;
-    ctx.globalAlpha = style.grain * 0.5;
-    for (let y = 0; y < h; y += step) {
-      for (let x = 0; x < w; x += step) {
-        const v = rng();
-        if (v > 0.82) {
-          ctx.fillStyle = v > 0.94 ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)';
-          ctx.fillRect(x, y, step, step);
-        }
-      }
+    const pattern = ctx.createPattern(grainTile(), 'repeat');
+    if (pattern) {
+      ctx.globalAlpha = style.grain * 0.55;
+      ctx.fillStyle = pattern;
+      // Versatz, damit nicht jedes Bild dieselbe Koernung an derselben Stelle hat.
+      const ox = Math.floor(rng() * GRAIN_SIZE);
+      const oy = Math.floor(rng() * GRAIN_SIZE);
+      ctx.translate(-ox, -oy);
+      ctx.fillRect(ox, oy, w + GRAIN_SIZE, h + GRAIN_SIZE);
+      ctx.translate(ox, oy);
+      ctx.globalAlpha = 1;
     }
-    ctx.globalAlpha = 1;
   }
+}
+
+const GRAIN_SIZE = 128;
+let grainCanvas: HTMLCanvasElement | undefined;
+
+/** Erzeugt die Koernungskachel beim ersten Bedarf und behaelt sie. */
+function grainTile(): HTMLCanvasElement {
+  if (grainCanvas) return grainCanvas;
+  const c = document.createElement('canvas');
+  c.width = GRAIN_SIZE;
+  c.height = GRAIN_SIZE;
+  const g = c.getContext('2d');
+  if (g) {
+    const img = g.createImageData(GRAIN_SIZE, GRAIN_SIZE);
+    const rng = makeRng(20240914);
+    for (let i = 0; i < img.data.length; i += 4) {
+      const v = rng();
+      const on = v > 0.8;
+      const bright = v > 0.93;
+      img.data[i] = img.data[i + 1] = img.data[i + 2] = bright ? 255 : 0;
+      img.data[i + 3] = on ? 128 : 0;
+    }
+    g.putImageData(img, 0, 0);
+  }
+  grainCanvas = c;
+  return c;
 }
 
 function drawBokeh(ctx: CanvasRenderingContext2D, w: number, h: number, palette: string[], rng: Rng) {

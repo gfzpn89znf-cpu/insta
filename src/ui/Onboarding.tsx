@@ -11,20 +11,24 @@ export default function Onboarding({ canResume, onResume }: { canResume: boolean
   const [niche, setNiche] = useState<NicheId>('fitness');
   const [bio, setBio] = useState('');
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState(0);
 
   const cleanHandle = normalizeHandle(handle || name).slice(0, 24);
 
   const start = () => {
     setBusy(true);
-    // Der Weltaufbau rechnet zwei Wochen Vorgeschichte - kurz Luft lassen.
-    window.setTimeout(() => {
-      startNewWorld({
+    // Der Weltaufbau rechnet die Vorgeschichte der Szene in Haeppchen,
+    // damit die Anzeige mitlaeuft statt zu blockieren.
+    void startNewWorld(
+      {
         name: name.trim() || 'Neuer Account',
         handle: cleanHandle || 'neuer.account',
         bio: bio.trim() || NICHES[niche].bios[0],
         niche,
-      });
-    }, 50);
+      },
+      undefined,
+      setProgress,
+    );
   };
 
   return (
@@ -107,10 +111,19 @@ export default function Onboarding({ canResume, onResume }: { canResume: boolean
             <div className="row" style={{ marginTop: 18 }}>
               <button className="btn secondary" onClick={() => setStep(1)} disabled={busy}>Zurueck</button>
               <button className="btn grad" style={{ flex: 1 }} onClick={start} disabled={busy}>
-                {busy ? 'Welt wird aufgebaut...' : 'Account erstellen'}
+                {busy ? `Welt wird aufgebaut... ${Math.round(progress * 100)} %` : 'Account erstellen'}
               </button>
             </div>
-            {busy && <div className="hint center-text">220 KI-Accounts erleben gerade ihre letzten zwei Wochen.</div>}
+            {busy && (
+              <div style={{ marginTop: 14 }}>
+                <div className="meter">
+                  <span style={{ width: `${Math.max(3, Math.round(progress * 100))}%` }} />
+                </div>
+                <div className="hint center-text">
+                  220 KI-Accounts erleben gerade ihre letzten zehn Tage: Beitraege, Follower, erste Trends.
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>
