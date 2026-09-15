@@ -586,7 +586,7 @@ table.data tr:hover td { background: var(--surface); }
 }
 
 .modal.narrow { max-width: 460px; }
-.modal-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--surface); z-index: 2; }
+.modal-head { display: flex; align-items: center; justify-content: space-between; padding: calc(14px + env(safe-area-inset-top)) 18px 14px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--surface); z-index: 2; }
 .modal-body { padding: 18px; }
 
 .detail { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(300px, 1fr); }
@@ -719,12 +719,27 @@ table.data tr:hover td { background: var(--surface); }
   .mobile-bar button { background: none; border: none; color: var(--text); font-size: 21px; padding: 5px 12px; position: relative; }
   .mobile-bar button.active { transform: scale(1.12); }
 
+  /* Grosszuegige Tippflaechen - 22 Pixel Schrift sind kein Knopf. */
+  .topbar .icon-btn {
+    width: 42px;
+    height: 42px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+  }
+
   .topbar {
     display: flex;
     align-self: stretch;
     align-items: center;
     justify-content: space-between;
+    /*
+     * Als installierte App reicht die Seite bis unter die Statusleiste des
+     * iPhones. Ohne diesen Abstand liegt der Einstellungen-Knopf hinter der
+     * Uhr und der Akkuanzeige und laesst sich nicht antippen.
+     */
     padding: 11px 14px;
+    padding-top: calc(11px + env(safe-area-inset-top));
     border-bottom: 1px solid var(--border);
     position: sticky;
     top: 0;
@@ -833,7 +848,7 @@ table.data tr:hover td { background: var(--surface); }
   .detail { display: block; background: var(--bg); }
   .detail-media { aspect-ratio: 1/1; }
   .detail-side { max-height: none; }
-  .detail-head { background: var(--bg); }
+  .detail-head { background: var(--bg); padding-top: calc(11px + env(safe-area-inset-top)); }
   .detail-foot { background: var(--bg); position: sticky; bottom: 0; }
 }
 
