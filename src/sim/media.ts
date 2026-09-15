@@ -1,4 +1,5 @@
 import { dbGetMedia, dbPutMedia } from './db';
+import { networkAllowed } from './flags';
 import type { NicheId, Post } from './types';
 
 /**
@@ -60,12 +61,21 @@ async function withSlot<T>(work: () => Promise<T>): Promise<T> {
 }
 
 async function fetchJson(params: Record<string, string>): Promise<unknown> {
+  // Im Privatmodus geht keine einzige Anfrage raus.
+  if (!networkAllowed()) throw new Error('Privatmodus');
   const url = `${API}?${new URLSearchParams({ format: 'json', origin: '*', ...params }).toString()}`;
   return withSlot(async () => {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 12000);
     try {
-      const response = await fetch(url, { headers: { Accept: 'application/json' }, signal: controller.signal });
+      const response = await fetch(url, {
+        headers: { Accept: 'application/json' },
+        // Weder Herkunft noch Sitzungsdaten mitschicken.
+        referrerPolicy: 'no-referrer',
+        credentials: 'omit',
+        cache: 'force-cache',
+        signal: controller.signal,
+      });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       return await response.json();
     } finally {

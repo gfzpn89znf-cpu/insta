@@ -5,9 +5,21 @@ import { storageEstimate } from '../sim/db';
 import { queryFor, searchImages, searchVideos, type MediaHit } from '../sim/media';
 import { portraitUrl } from '../sim/photos';
 import { importPhoto, pruneOrphanPhotos } from '../sim/photos';
+import {
+  AUTOLOCK_CHOICES,
+  getPrivacy,
+  hasLock,
+  lockAvailable,
+  lockNow,
+  onPrivacyChange,
+  removePin,
+  setPrivacy,
+  wipeEverything,
+} from '../sim/privacy';
 import { dispatch, resetWorld, saveNow, setSpeed } from '../sim/store';
 import type { World } from '../sim/types';
 import { SPEEDS } from '../App';
+import Lock from './Lock';
 import { AccountAvatar } from './Media';
 import ScreenHeader from './Screen';
 import { clockOf, followersOf, formatShort } from './common';
@@ -151,7 +163,7 @@ export default function Settings({
               <span>
                 <b>Echte Fotos der KI-Accounts</b>
                 <div className="hint" style={{ margin: 0 }}>
-                  Laedt Fotos aus dem Netz. Ohne Verbindung zeichnet die App die Bilder selbst.
+                  Laedt Fotos aus dem Netz. Ohne Verbindung - und im Privatmodus - zeichnet die App die Bilder selbst.
                 </div>
               </span>
               <input
@@ -186,6 +198,9 @@ export default function Settings({
               Speicher aufraeumen
             </button>
 
+            <div className="section-title">Sicherheit und Privatsphaere</div>
+            <PrivacySection onToast={onToast} />
+
             <div className="section-title">Kuenstliche Intelligenz</div>
             <AiSection onToast={onToast} />
 
@@ -205,12 +220,17 @@ export default function Settings({
             {confirming ? (
               <div className="card" style={{ padding: 12, marginTop: 10 }}>
                 <p className="small">
-                  Damit werden dein Account, alle Beitraege und die gesamte Welt geloescht. Das laesst sich nicht
-                  rueckgaengig machen.
+                  Damit werden dein Account, alle Beitraege, alle hochgeladenen Fotos und Videos, deine PIN und dein
+                  KI-Schluessel von diesem Geraet geloescht. Das laesst sich nicht rueckgaengig machen.
                 </p>
                 <div className="row">
                   <button className="btn secondary sm" onClick={() => setConfirming(false)}>Abbrechen</button>
-                  <button className="btn sm danger" onClick={() => void resetWorld()}>
+                  <button
+                    className="btn sm danger"
+                    onClick={() => {
+                      void wipeEverything().then(() => void resetWorld());
+                    }}
+                  >
                     Endgueltig loeschen
                   </button>
                 </div>
@@ -223,11 +243,170 @@ export default function Settings({
 
             <div className="hint" style={{ marginTop: 16 }}>
               Fotogram ist eine Simulation. Alle Accounts, Kommentare und Nachrichten werden auf deinem Geraet erzeugt -
-              es gibt keinen Server und keine echten Personen.
+              es gibt keinen Server und keine echten Personen. Deine Fotos werden nirgendwo hochgeladen.
             </div>
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Sicherheit und Privatsphaere an einer Stelle: die Sperre, der Privatmodus
+ * und eine ehrliche Auskunft darueber, was das Geraet ueberhaupt verlaesst.
+ */
+function PrivacySection({ onToast }: { onToast: (msg: string) => void }) {
+  const [privacy, setLocal] = useState(getPrivacy);
+  const [locked, setLocked] = useState(hasLock);
+  const [creating, setCreating] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() =>
+    onPrivacyChange(() => {
+      setLocal(getPrivacy());
+      setLocked(hasLock());
+    }),
+  []);
+
+  const change = (patch: Parameters<typeof setPrivacy>[0]) => {
+    setPrivacy(patch);
+    setLocal(getPrivacy());
+  };
+
+  if (creating) {
+    return (
+      <Lock
+        mode="create"
+        onDone={() => {
+          setCreating(false);
+          setLocked(true);
+          onToast('Die App ist jetzt mit deiner PIN verschluesselt.');
+        }}
+        onCancel={() => setCreating(false)}
+      />
+    );
+  }
+
+  return (
+    <div className="card" style={{ padding: 14 }}>
+      <div className="row" style={{ marginBottom: 8 }}>
+        <b>{locked ? '🔒 Mit PIN verschluesselt' : '🔓 Ohne PIN'}</b>
+      </div>
+      <p className="small muted" style={{ marginTop: 0 }}>
+        {locked
+          ? 'Spielstand, Fotos und Videos liegen verschluesselt auf dem Geraet. Ohne deine PIN sind sie nicht lesbar - auch nicht fuer jemanden, der dein Handy in der Hand hat.'
+          : 'Setze eine PIN, dann werden dein Spielstand und alle hochgeladenen Fotos und Videos auf dem Geraet verschluesselt (AES-256).'}
+      </p>
+
+      {!lockAvailable() && (
+        <div className="tip warn">
+          <span>⚠️</span>
+          <span>Dieser Browser bietet keine Verschluesselung an. Oeffne die App ueber eine https-Adresse.</span>
+        </div>
+      )}
+
+      {locked ? (
+        <>
+          <span className="label">Automatisch sperren</span>
+          <select
+            className="select"
+            id="privacy-autolock"
+            value={privacy.autoLockMinutes}
+            onChange={(e) => change({ autoLockMinutes: Number(e.target.value) })}
+          >
+            {AUTOLOCK_CHOICES.map((m) => (
+              <option key={m} value={m}>
+                {m === 0 ? 'Sofort beim Verlassen' : m === 60 ? 'Nach 1 Stunde' : `Nach ${m} Minute${m === 1 ? '' : 'n'}`}
+              </option>
+            ))}
+          </select>
+          <div className="hint">
+            Die Zeit laeuft, sobald du die App verlaesst. Solange gesperrt ist, liegt der Schluessel nirgends - auch
+            nicht im Arbeitsspeicher.
+          </div>
+          <div className="row" style={{ marginTop: 10 }}>
+            <button className="btn secondary sm" onClick={() => lockNow()}>
+              Jetzt sperren
+            </button>
+            <button
+              className="btn ghost sm"
+              disabled={busy}
+              onClick={() => {
+                setBusy(true);
+                void removePin().then((outcome) => {
+                  setBusy(false);
+                  setLocked(hasLock());
+                  onToast(outcome.message);
+                });
+              }}
+            >
+              PIN entfernen
+            </button>
+          </div>
+        </>
+      ) : (
+        <button className="btn grad full" disabled={!lockAvailable()} onClick={() => setCreating(true)}>
+          PIN einrichten
+        </button>
+      )}
+
+      <label className="switch-row" htmlFor="privacy-offline" style={{ marginTop: 14 }}>
+        <span>
+          <b>Privatmodus</b>
+          <div className="hint" style={{ margin: 0 }}>
+            Keine einzige Verbindung nach draussen: keine Fotos aus dem Netz, keine Profilbilder, keine KI. Alles wird
+            auf dem Geraet gerechnet und gezeichnet.
+          </div>
+        </span>
+        <input
+          id="privacy-offline"
+          type="checkbox"
+          checked={privacy.offline}
+          onChange={(e) => change({ offline: e.target.checked })}
+        />
+      </label>
+
+      <label className="switch-row" htmlFor="privacy-vision">
+        <span>
+          <b>Bilderkennung erlauben</b>
+          <div className="hint" style={{ margin: 0 }}>
+            Nur mit diesem Haken schickt die App eine verkleinerte Fassung deines Fotos - bei Videos ein Standbild - an
+            die KI, damit sie erkennt, worum es geht. Ohne Haken bleibt jedes Bild auf dem Geraet.
+          </div>
+        </span>
+        <input
+          id="privacy-vision"
+          type="checkbox"
+          checked={privacy.shareImages}
+          disabled={privacy.offline}
+          onChange={(e) => change({ shareImages: e.target.checked })}
+        />
+      </label>
+
+      <details className="disclose">
+        <summary>Was verlaesst dieses Geraet?</summary>
+        <ul className="small muted">
+          <li>
+            <b>Deine Fotos und Videos: nie.</b> Sie liegen nur im Speicher deines Browsers. Fotogram hat keinen Server,
+            auf den sie hochgeladen werden koennten - es gibt keinen Account, kein Login, keine Cloud.
+          </li>
+          <li>
+            <b>Dein Spielstand, deine Chats, deine Beitraege: nie.</b> Alles wird auf dem Geraet berechnet.
+          </li>
+          <li>
+            <b>Mit eingerichteter KI:</b> die Texte der Unterhaltung gehen verschluesselt an api.anthropic.com, damit
+            dort eine Antwort entsteht. Bilder nur, wenn du oben die Bilderkennung erlaubst.
+          </li>
+          <li>
+            <b>Mit „Echte Fotos der KI-Accounts":</b> es werden Suchbegriffe wie „meal prep" an commons.wikimedia.org
+            geschickt und Bilder von dort geladen. Diese Dienste sehen dabei die IP-Adresse deines Anschlusses.
+          </li>
+          <li>
+            <b>Der Privatmodus schaltet all das ab</b> - dann geht ueberhaupt nichts mehr raus.
+          </li>
+        </ul>
+      </details>
     </div>
   );
 }

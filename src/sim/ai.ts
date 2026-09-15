@@ -1,4 +1,6 @@
 import type Anthropic from '@anthropic-ai/sdk';
+import { getActiveKey, openText, sealText } from './crypto';
+import { networkAllowed } from './flags';
 
 /**
  * Echte KI fuer die Accounts.
@@ -9,10 +11,14 @@ import type Anthropic from '@anthropic-ai/sdk';
  * eingebauten Textbausteine. Die App funktioniert also in jedem Fall.
  *
  * Der Schluessel liegt ausschliesslich im Browser des Geraets (localStorage),
- * wird nie mitgespeichert und geht an niemanden ausser an Anthropic.
+ * wird nie mitgespeichert und geht an niemanden ausser an Anthropic. Ist eine
+ * PIN gesetzt, liegt er dort zusaetzlich verschluesselt und steht erst nach
+ * dem Entsperren im Arbeitsspeicher.
  */
 
 const KEY_STORE = 'fotogram.ai.key';
+/** Derselbe Schluessel, aber mit der PIN verschluesselt. */
+const KEY_SEALED_STORE = 'fotogram.ai.key.sealed';
 const MODEL_STORE = 'fotogram.ai.model';
 const BUDGET_STORE = 'fotogram.ai.budget';
 const USAGE_STORE = 'fotogram.ai.usage';
@@ -50,9 +56,49 @@ export interface AiSettings {
   dailyBudget: number;
 }
 
+/**
+ * Bei gesetzter PIN steht der Schluessel nur hier, nur solange die App
+ * entsperrt ist.
+ */
+let keyInMemory = '';
+
+/** Verschluesselt den hinterlegten Schluessel - beim Setzen einer PIN. */
+export async function protectApiKey(key: CryptoKey): Promise<void> {
+  const plain = read(KEY_STORE) || keyInMemory;
+  keyInMemory = plain;
+  if (plain) write(KEY_SEALED_STORE, await sealText(key, plain));
+  write(KEY_STORE, '');
+  notify();
+}
+
+/** Schreibt ihn wieder im Klartext - beim Entfernen der PIN. */
+export async function unprotectApiKey(key: CryptoKey): Promise<void> {
+  const sealed = read(KEY_SEALED_STORE);
+  const plain = sealed ? await openText(key, sealed) : keyInMemory;
+  if (plain) write(KEY_STORE, plain);
+  write(KEY_SEALED_STORE, '');
+  keyInMemory = '';
+  notify();
+}
+
+/** Holt den Schluessel nach dem Entsperren in den Arbeitsspeicher. */
+export async function loadApiKey(key: CryptoKey): Promise<void> {
+  const sealed = read(KEY_SEALED_STORE);
+  keyInMemory = sealed ? ((await openText(key, sealed)) ?? '') : '';
+  client = undefined;
+  notify();
+}
+
+/** Beim Sperren: der Schluessel verschwindet aus dem Arbeitsspeicher. */
+export function forgetApiKey(): void {
+  keyInMemory = '';
+  client = undefined;
+  notify();
+}
+
 export function getAiSettings(): AiSettings {
   return {
-    apiKey: read(KEY_STORE),
+    apiKey: read(KEY_SEALED_STORE) ? keyInMemory : read(KEY_STORE),
     model: read(MODEL_STORE) || DEFAULT_MODEL,
     dailyBudget: Number(read(BUDGET_STORE)) || DEFAULT_BUDGET,
   };
@@ -60,7 +106,19 @@ export function getAiSettings(): AiSettings {
 
 export function setAiSettings(patch: Partial<AiSettings>) {
   if (patch.apiKey !== undefined) {
-    write(KEY_STORE, patch.apiKey.trim());
+    const value = patch.apiKey.trim();
+    const lockKey = getActiveKey();
+    if (lockKey) {
+      // Mit PIN wird der Schluessel nur verschluesselt abgelegt.
+      keyInMemory = value;
+      if (value) void sealText(lockKey, value).then((sealed) => write(KEY_SEALED_STORE, sealed));
+      else write(KEY_SEALED_STORE, '');
+      write(KEY_STORE, '');
+    } else {
+      write(KEY_STORE, value);
+      write(KEY_SEALED_STORE, '');
+      keyInMemory = '';
+    }
     client = undefined;
   }
   if (patch.model !== undefined) {
@@ -199,6 +257,7 @@ function release() {
  * die eingebauten Texte.
  */
 export async function ask(options: AskOptions): Promise<string | null> {
+  if (!networkAllowed()) return null;
   const settings = getAiSettings();
   if (!settings.apiKey) return null;
 
@@ -268,6 +327,7 @@ export async function askVision(
   image: { data: string; mediaType: string },
   maxTokens = 400,
 ): Promise<string | null> {
+  if (!networkAllowed()) return null;
   const settings = getAiSettings();
   if (!settings.apiKey) return null;
 

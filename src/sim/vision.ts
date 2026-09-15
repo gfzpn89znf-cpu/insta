@@ -1,4 +1,5 @@
 import { aiReady, askVision, parseJsonObject } from './ai';
+import { getPrivacy } from './flags';
 import { NICHES, NICHE_IDS } from './niches';
 import type { NicheId } from './types';
 
@@ -7,6 +8,10 @@ import type { NicheId } from './types';
  *
  * Bei Videos wird ein Einzelbild aus der Mitte herausgegriffen - ein Bild
  * reicht, um das Thema zu erkennen, und spart Datenmenge.
+ *
+ * Wichtig: dafuer verlaesst eine verkleinerte Fassung der Aufnahme das
+ * Geraet. Das passiert nur, wenn es in den Einstellungen ausdruecklich
+ * erlaubt wurde - die Vorgabe ist "aus".
  */
 
 export interface MediaInsight {
@@ -103,8 +108,13 @@ const SYSTEM = [
   '- "unterschrift": ein Vorschlag fuer die Bildunterschrift, hoechstens 200 Zeichen, persoenlich formuliert.',
 ].join('\n');
 
-/** Analysiert eine hochgeladene Datei. Gibt null zurueck, wenn keine KI da ist. */
+/**
+ * Analysiert eine hochgeladene Datei. Gibt null zurueck, wenn die
+ * Bilderkennung nicht erlaubt oder keine KI eingerichtet ist.
+ */
 export async function describeUpload(file: File): Promise<MediaInsight | null> {
+  // Ohne ausdrueckliche Erlaubnis sieht die Bilderkennung nichts.
+  if (!getPrivacy().shareImages) return null;
   if (!aiReady()) return null;
 
   const frame = file.type.startsWith('video/') ? await grabVideoFrame(file) : await loadImageFrame(file);

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { drawAvatar, drawPostImage } from '../sim/image';
+import { networkAllowed } from '../sim/flags';
 import { resolvePostMedia } from '../sim/media';
 import { guessFemale } from '../sim/names';
 import { photoUrl, portraitUrl, stockPhotoUrls } from '../sim/photos';
@@ -93,7 +94,7 @@ export function PostMedia({
 }) {
   const uploaded = usePhotoUrl(post.photoSource === 'upload' ? post.photoId : undefined);
   const [sourceIndex, setSourceIndex] = useState(0);
-  const useStock = post.photoSource === 'stock' && stockEnabled;
+  const useStock = post.photoSource === 'stock' && stockEnabled && networkAllowed();
 
   // Erst das gesuchte Foto zum Motiv, dann die allgemeinen Dienste.
   const candidates = useStock
@@ -143,11 +144,16 @@ export function PostMedia({
 /**
  * Steuert, ob Fotos aus dem Netz geladen werden duerfen. Wird aus den
  * Einstellungen gesetzt, damit nicht jede Avatar-Stelle die Welt kennen muss.
+ * Der Privatmodus sticht die Einstellung immer aus.
  */
-let stockAllowed = true;
+let stockSetting = true;
 
 export function setStockPhotosAllowed(value: boolean) {
-  stockAllowed = value;
+  stockSetting = value;
+}
+
+function stockPhotosOn(): boolean {
+  return stockSetting && networkAllowed();
 }
 
 /** Eigenes Video im Feed: laeuft stumm, sobald es sichtbar wird. */
@@ -199,7 +205,7 @@ export function AccountAvatar({ account, size = 40 }: { account: Account; size?:
 
   // KI-Accounts bekommen ein echtes Gesicht - der Nutzer behaelt seinen Avatar,
   // solange er kein eigenes Foto gesetzt hat.
-  if (!account.isUser && stockAllowed && !portraitFailed) {
+  if (!account.isUser && stockPhotosOn() && !portraitFailed) {
     return (
       <img
         className="avatar"
@@ -251,13 +257,13 @@ export function ReelMedia({
 
   // Passendes Video einmalig suchen lassen.
   useEffect(() => {
-    if (post.videoId || post.mediaVideo || post.mediaTried || !stockEnabled) return;
+    if (post.videoId || post.mediaVideo || post.mediaTried || !stockEnabled || !networkAllowed()) return;
     void resolvePostMedia(post).then((changed) => {
       if (changed) touch();
     });
   }, [post.id, stockEnabled]);
 
-  const source = post.videoId ? ownVideo : stockEnabled && !videoFailed ? post.mediaVideo : undefined;
+  const source = post.videoId ? ownVideo : stockEnabled && networkAllowed() && !videoFailed ? post.mediaVideo : undefined;
 
   useEffect(() => {
     const el = videoRef.current;
@@ -299,7 +305,7 @@ export function ReelMedia({
 /** Bild einer Story - gleiche Logik wie beim Beitrag. */
 export function StoryMedia({ account, size = 540, stockEnabled = true }: { account: Account; size?: number; stockEnabled?: boolean }) {
   const [sourceIndex, setSourceIndex] = useState(0);
-  const candidates = stockEnabled ? stockPhotoUrls(account.storySeed, account.niche, size) : [];
+  const candidates = stockEnabled && networkAllowed() ? stockPhotoUrls(account.storySeed, account.niche, size) : [];
   if (sourceIndex < candidates.length) {
     return (
       <img

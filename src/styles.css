@@ -1118,3 +1118,107 @@ table.data tr:hover td { background: var(--surface); }
 @media (min-width: 901px) {
   .reels { margin: 0; border-radius: 14px; max-width: 460px; }
 }
+
+/* --------------------------------------------------------------- */
+/* Sperre und Sichtschutz                                           */
+/* --------------------------------------------------------------- */
+
+.lock {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px calc(16px + env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom))
+    calc(16px + env(safe-area-inset-left));
+  background: radial-gradient(120% 90% at 50% 0%, #17121f 0%, var(--bg) 62%);
+}
+
+.lock-card {
+  width: 100%;
+  max-width: 360px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 26px 20px 20px;
+  text-align: center;
+}
+
+.lock-icon {
+  font-size: 30px;
+  margin-bottom: 6px;
+}
+
+.lock-input {
+  margin-top: 10px;
+  text-align: center;
+  letter-spacing: 6px;
+  font-size: 18px;
+}
+
+.lock-input::placeholder {
+  letter-spacing: normal;
+  font-size: 14px;
+}
+
+/*
+ * Sichtschutz: sobald die App in den Hintergrund geht, liegt eine
+ * Milchglasscheibe darueber. Das Vorschaubild im App-Umschalter des Handys
+ * zeigt dann keine Beitraege mehr.
+ */
+.privacy-shade {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(8, 8, 12, 0.86);
+  backdrop-filter: blur(26px);
+  -webkit-backdrop-filter: blur(26px);
+}
+
+.app.shaded .main-col,
+.app.shaded .sidebar,
+.app.shaded .mobile-bar,
+.app.shaded .overlay {
+  filter: blur(18px);
+}
+
+/* Aufklappbarer Abschnitt "Was verlaesst dieses Geraet?" */
+.disclose {
+  margin-top: 14px;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+.disclose > summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  list-style: none;
+}
+
+.disclose > summary::-webkit-details-marker {
+  display: none;
+}
+
+.disclose > summary::before {
+  content: '▸ ';
+  color: var(--muted);
+}
+
+.disclose[open] > summary::before {
+  content: '▾ ';
+}
+
+.disclose ul {
+  margin: 10px 0 0;
+  padding-left: 18px;
+}
+
+.disclose li {
+  margin-bottom: 8px;
+  line-height: 1.5;
+}

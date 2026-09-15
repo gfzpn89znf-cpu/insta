@@ -1,3 +1,4 @@
+import { getActiveKey } from './crypto';
 import { dbClearWorld, dbGetWorld, dbPutWorld } from './db';
 import { rebuildIndex, WORLD_VERSION } from './world';
 import type { World } from './types';
@@ -27,6 +28,13 @@ function toStorable(world: World): World {
 export async function saveWorld(world: World): Promise<boolean> {
   const payload = toStorable(world);
   if (await dbPutWorld(payload)) return true;
+
+  // Mit gesetzter PIN gibt es keinen Klartext-Rueckfall: lieber kein
+  // Speicherstand als ein offen lesbarer.
+  if (getActiveKey()) {
+    listener?.(false, 'Der Spielstand konnte nicht verschluesselt gespeichert werden.');
+    return false;
+  }
 
   try {
     localStorage.setItem(LEGACY_KEY, JSON.stringify(payload));

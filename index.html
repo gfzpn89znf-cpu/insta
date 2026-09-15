@@ -3,6 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!--
+      Sicherheitsregeln des Browsers: die Seite darf nur ihre eigenen Dateien
+      ausfuehren und nur mit den drei Diensten sprechen, die unten stehen.
+      Selbst wenn es jemandem gelaenge, Text einzuschleusen, koennte er ihn
+      weder ausfuehren noch Daten irgendwohin schicken.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://upload.wikimedia.org https://commons.wikimedia.org https://loremflickr.com https://*.staticflickr.com https://picsum.photos https://*.picsum.photos https://fastly.picsum.photos https://randomuser.me; media-src 'self' data: blob: https://upload.wikimedia.org; connect-src 'self' blob: data: https://api.anthropic.com https://commons.wikimedia.org https://upload.wikimedia.org; font-src 'self' data:; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'"
+    />
+    <!-- Keine Herkunftsangabe an fremde Bilddienste. -->
+    <meta name="referrer" content="no-referrer" />
     <meta name="theme-color" content="#000000" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />

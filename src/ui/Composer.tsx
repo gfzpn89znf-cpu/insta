@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import { NICHES, NICHE_IDS, STYLE_LABELS } from '../sim/niches';
 import { aiReady } from '../sim/ai';
 import { importPhoto, importVideo } from '../sim/photos';
+import { getPrivacy } from '../sim/flags';
 import { describeUpload, type MediaInsight } from '../sim/vision';
 import { createUserPost } from '../sim/posts';
 import { scoreDraft, type Draft } from '../sim/scoring';
@@ -63,7 +64,8 @@ export default function Composer({
 
   /** Schaut sich die Aufnahme an und erkennt, worum es geht. */
   const analyse = async (file: File) => {
-    if (!aiReady()) return;
+    // Ohne Erlaubnis verlaesst kein Bild das Geraet.
+    if (!getPrivacy().shareImages || !aiReady()) return;
     setAnalysing(true);
     const result = await describeUpload(file);
     setAnalysing(false);
@@ -233,6 +235,16 @@ export default function Composer({
             <div className="tip">
               <span>👁</span>
               <span>Die KI schaut sich deine Aufnahme an...</span>
+            </div>
+          )}
+
+          {(photoId || videoId) && aiReady() && !getPrivacy().shareImages && (
+            <div className="tip">
+              <span>🔒</span>
+              <span>
+                Deine Aufnahme bleibt auf dem Geraet. Wenn die KI erkennen soll, was darauf zu sehen ist, erlaube das in
+                den Einstellungen unter „Sicherheit und Privatsphaere".
+              </span>
             </div>
           )}
 

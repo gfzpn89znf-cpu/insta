@@ -4,7 +4,13 @@
  * Der Spielstand und die hochgeladenen Fotos liegen in IndexedDB. Das
  * localStorage-Limit von rund fuenf Megabyte reicht fuer Fotos nicht - und
  * ein Spielstand, der beim Speichern scheitert, ist keiner.
+ *
+ * Ist eine PIN gesetzt, geht nichts mehr im Klartext hinein: Spielstand,
+ * Fotos und Videos werden hier verschluesselt geschrieben und beim Lesen
+ * wieder geoeffnet. Ohne den Schluessel liefert das Lesen nichts.
  */
+
+import { getActiveKey, isSealed, openBytes, openJson, sealBytes, sealJson } from './crypto';
 
 const DB_NAME = 'fotogram';
 const DB_VERSION = 2;
@@ -68,24 +74,39 @@ function run<T>(store: string, mode: IDBTransactionMode, action: (s: IDBObjectSt
   );
 }
 
-export function dbGetWorld<T>(): Promise<T | null> {
-  return run<T>(STORE_WORLD, 'readonly', (s) => s.get(WORLD_KEY) as IDBRequest<T>);
+export async function dbGetWorld<T>(): Promise<T | null> {
+  const raw = await run<unknown>(STORE_WORLD, 'readonly', (s) => s.get(WORLD_KEY) as IDBRequest<unknown>);
+  if (raw == null) return null;
+  if (!isSealed(raw)) return raw as T;
+  const key = getActiveKey();
+  if (!key) return null;
+  return openJson<T>(key, raw);
 }
 
-export function dbPutWorld(value: unknown): Promise<boolean> {
-  return run(STORE_WORLD, 'readwrite', (s) => s.put(value, WORLD_KEY) as IDBRequest<unknown>).then((r) => r !== null);
+export async function dbPutWorld(value: unknown): Promise<boolean> {
+  const key = getActiveKey();
+  const payload = key ? await sealJson(key, value) : value;
+  return run(STORE_WORLD, 'readwrite', (s) => s.put(payload, WORLD_KEY) as IDBRequest<unknown>).then((r) => r !== null);
 }
 
 export function dbClearWorld(): Promise<void> {
   return run(STORE_WORLD, 'readwrite', (s) => s.delete(WORLD_KEY) as IDBRequest<undefined>).then(() => undefined);
 }
 
-export function dbPutPhoto(id: string, blob: Blob): Promise<boolean> {
-  return run(STORE_PHOTOS, 'readwrite', (s) => s.put(blob, id) as IDBRequest<unknown>).then((r) => r !== null);
+export async function dbPutPhoto(id: string, blob: Blob): Promise<boolean> {
+  const key = getActiveKey();
+  const payload = key ? await sealBytes(key, await blob.arrayBuffer(), blob.type || 'application/octet-stream') : blob;
+  return run(STORE_PHOTOS, 'readwrite', (s) => s.put(payload, id) as IDBRequest<unknown>).then((r) => r !== null);
 }
 
-export function dbGetPhoto(id: string): Promise<Blob | null> {
-  return run<Blob>(STORE_PHOTOS, 'readonly', (s) => s.get(id) as IDBRequest<Blob>);
+export async function dbGetPhoto(id: string): Promise<Blob | null> {
+  const raw = await run<unknown>(STORE_PHOTOS, 'readonly', (s) => s.get(id) as IDBRequest<unknown>);
+  if (raw == null) return null;
+  if (!isSealed(raw)) return raw as Blob;
+  const key = getActiveKey();
+  if (!key) return null;
+  const bytes = await openBytes(key, raw);
+  return bytes ? new Blob([bytes], { type: raw.type || 'application/octet-stream' }) : null;
 }
 
 export function dbDeletePhoto(id: string): Promise<void> {
@@ -106,6 +127,49 @@ export function dbGetMedia<T>(query: string): Promise<T | null> {
 
 export function dbPutMedia(query: string, value: unknown): Promise<boolean> {
   return run(STORE_MEDIA, 'readwrite', (s) => s.put(value, query) as IDBRequest<unknown>).then((r) => r !== null);
+}
+
+/**
+ * Schreibt alles mit einem anderen Schluessel neu - beim Setzen einer PIN
+ * (from = null) und beim Entfernen (to = null). Schlaegt einer der Schritte
+ * fehl, bleibt der alte Stand stehen, statt halb verschluesselt zu enden.
+ */
+export async function dbRekey(from: CryptoKey | null, to: CryptoKey | null): Promise<boolean> {
+  const rawWorld = await run<unknown>(STORE_WORLD, 'readonly', (s) => s.get(WORLD_KEY) as IDBRequest<unknown>);
+  if (rawWorld != null) {
+    let plain: unknown = rawWorld;
+    if (isSealed(rawWorld)) {
+      if (!from) return false;
+      plain = await openJson<unknown>(from, rawWorld);
+      if (plain == null) return false;
+    }
+    const next = to ? await sealJson(to, plain) : plain;
+    if ((await run(STORE_WORLD, 'readwrite', (s) => s.put(next, WORLD_KEY) as IDBRequest<unknown>)) === null) return false;
+  }
+
+  for (const id of await dbAllPhotoIds()) {
+    const raw = await run<unknown>(STORE_PHOTOS, 'readonly', (s) => s.get(id) as IDBRequest<unknown>);
+    if (raw == null) continue;
+    let blob: Blob;
+    if (isSealed(raw)) {
+      if (!from) return false;
+      const bytes = await openBytes(from, raw);
+      if (!bytes) return false;
+      blob = new Blob([bytes], { type: raw.type || 'application/octet-stream' });
+    } else {
+      blob = raw as Blob;
+    }
+    const next = to ? await sealBytes(to, await blob.arrayBuffer(), blob.type || 'application/octet-stream') : blob;
+    if ((await run(STORE_PHOTOS, 'readwrite', (s) => s.put(next, id) as IDBRequest<unknown>)) === null) return false;
+  }
+  return true;
+}
+
+/** Leert alle Speicher restlos - fuer "alle Daten loeschen". */
+export async function dbWipe(): Promise<void> {
+  for (const store of [STORE_WORLD, STORE_PHOTOS, STORE_MEDIA]) {
+    await run(store, 'readwrite', (s) => s.clear() as IDBRequest<undefined>);
+  }
 }
 
 /** Verfuegbarer und belegter Speicherplatz, soweit der Browser ihn verraet. */

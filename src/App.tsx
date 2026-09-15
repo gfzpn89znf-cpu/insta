@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { hasSave } from './sim/persistence';
 import { pickIncomingCaller } from './sim/calls';
 import { requestPersistentStorage } from './sim/db';
+import { getPrivacy, hasLock, lockNow, lockState, onPrivacyChange } from './sim/privacy';
 import { resumeWorld, saveNow, setSaveListener, setSpeed, useWorld } from './sim/store';
 import type { World } from './sim/types';
 import Call from './ui/Call';
@@ -17,6 +18,7 @@ import Onboarding from './ui/Onboarding';
 import People from './ui/People';
 import PostDetail from './ui/PostDetail';
 import Profile from './ui/Profile';
+import Lock from './ui/Lock';
 import Reels from './ui/Reels';
 import Rail from './ui/Rail';
 import Settings from './ui/Settings';
@@ -41,17 +43,22 @@ export default function App() {
   const [toast, setToast] = useState<string | null>(null);
   const bootStarted = useRef(false);
   const lastIncoming = useRef(0);
+  const [locked, setLocked] = useState(() => lockState() === 'locked');
+
+  // Sperre beobachten: sie kann auch von den Einstellungen aus umgelegt werden.
+  useEffect(() => onPrivacyChange(() => setLocked(lockState() === 'locked')), []);
 
   // Gespeicherten Stand fortsetzen - in Haeppchen, damit die Anzeige mitlaeuft.
+  // Erst nach dem Entsperren, sonst laesst sich nichts entschluesseln.
   useEffect(() => {
-    if (bootStarted.current) return;
+    if (locked || bootStarted.current) return;
     bootStarted.current = true;
     void (async () => {
       void requestPersistentStorage();
       if (await hasSave()) await resumeWorld(setBootProgress);
       setBooting(false);
     })();
-  }, []);
+  }, [locked]);
 
   useEffect(() => {
     setSaveListener((ok, message) => {
@@ -81,6 +88,17 @@ export default function App() {
     return () => window.clearInterval(timer);
   }, [world, nav]);
 
+  if (locked) {
+    return (
+      <Lock
+        mode="unlock"
+        onDone={() => {
+          setLocked(false);
+          setBooting(true);
+        }}
+      />
+    );
+  }
   if (booting) return <BootScreen progress={bootProgress} />;
   if (!world) return <Onboarding onStarted={() => setBooting(false)} />;
 
@@ -102,6 +120,9 @@ function Shell({
   setStockPhotosAllowed(world.settings.stockPhotos);
   const unreadNotifs = world.notifications.filter((n) => !n.read).length;
   const unreadDms = world.threadOrder.filter((id) => world.threads[id]?.unread).length;
+
+  useAutoLock();
+  const shaded = usePrivacyShade();
 
   const openProfile = useCallback((id: string) => nav.go({ kind: 'profile', id }), [nav]);
   const openPost = useCallback((id: string) => nav.go({ kind: 'post', id }), [nav]);
@@ -192,7 +213,7 @@ function Shell({
     top.kind === 'chat' || top.kind === 'people' || top.kind === 'settings' || top.kind === 'editProfile' || top.kind === 'reels';
 
   return (
-    <div className="app">
+    <div className={`app${shaded ? ' shaded' : ''}`}>
       <nav className="sidebar">
         <div className="brand">Fotogram</div>
         <NavButton icon="⌂" label="Startseite" active={nav.tab === 'feed'} onClick={() => nav.goTab('feed')} />
@@ -300,8 +321,62 @@ function Shell({
       )}
 
       {toast && <div className="toast">{toast}</div>}
+      {shaded && (
+        <div className="privacy-shade" aria-hidden="true">
+          <div className="brand" style={{ padding: 0, fontSize: 30 }}>Fotogram</div>
+        </div>
+      )}
     </div>
   );
+}
+
+/**
+ * Sperrt wieder, wenn die App lange genug im Hintergrund war. Die Zeit
+ * laeuft ab dem Moment, in dem das Fenster verschwindet.
+ */
+function useAutoLock() {
+  useEffect(() => {
+    if (!hasLock()) return;
+    let hiddenAt = 0;
+    const onChange = () => {
+      if (document.visibilityState === 'hidden') {
+        hiddenAt = Date.now();
+        // "Sofort" heisst wirklich sofort - der Schluessel geht raus, bevor
+        // ein anderes Fenster nach vorne kommt.
+        if (getPrivacy().autoLockMinutes === 0) lockNow();
+        return;
+      }
+      const minutes = getPrivacy().autoLockMinutes;
+      if (hiddenAt && Date.now() - hiddenAt >= minutes * 60000) lockNow();
+      hiddenAt = 0;
+    };
+    document.addEventListener('visibilitychange', onChange);
+    window.addEventListener('pagehide', onChange);
+    return () => {
+      document.removeEventListener('visibilitychange', onChange);
+      window.removeEventListener('pagehide', onChange);
+    };
+  }, []);
+}
+
+/**
+ * Sichtschutz: sobald die App in den Hintergrund geht, legt sich eine
+ * Milchglasscheibe darueber. Damit steht im App-Umschalter des Handys kein
+ * lesbares Vorschaubild deiner Beitraege.
+ */
+function usePrivacyShade() {
+  const [shaded, setShaded] = useState(false);
+  useEffect(() => {
+    const hide = () => setShaded(true);
+    const sync = () => setShaded(document.visibilityState === 'hidden');
+    document.addEventListener('visibilitychange', sync);
+    window.addEventListener('pagehide', hide);
+    return () => {
+      document.removeEventListener('visibilitychange', sync);
+      window.removeEventListener('pagehide', hide);
+    };
+  }, []);
+  return shaded;
 }
 
 function NavButton({
