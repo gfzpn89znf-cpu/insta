@@ -40,9 +40,20 @@ jobs:
       - name: App bauen
         run: npm run build
 
-      - uses: actions/configure-pages@v5
+      # Versucht, GitHub Pages einzuschalten. Ohne Administratorrechte des
+      # Workflows geht das nicht - dann ist einmalig eine Einstellung noetig.
+      - name: GitHub Pages vorbereiten
+        id: pages
+        continue-on-error: true
+        uses: actions/configure-pages@v5
         with:
           enablement: true
+
+      - name: Hinweis, falls Pages noch nicht aktiv ist
+        if: steps.pages.outcome == 'failure'
+        run: |
+          echo "::error title=GitHub Pages ist noch nicht aktiviert::Einmalig einschalten: Settings -> Pages -> Build and deployment -> Source: 'GitHub Actions'. Danach diesen Lauf wiederholen (Re-run all jobs)."
+          exit 1
 
       - uses: actions/upload-pages-artifact@v3
         with:

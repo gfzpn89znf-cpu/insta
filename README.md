@@ -127,12 +127,16 @@ Es gibt drei Bildquellen, und die App fällt automatisch auf die nächste zurüc
 
 ## Veröffentlichen
 
-Ein Push auf `main` (oder den Entwicklungszweig) baut die App, lässt die Tests
-laufen und veröffentlicht sie über GitHub Pages – siehe
-`.github/workflows/deploy.yml`. Die Adresse lautet dann
-`https://<benutzer>.github.io/<repository>/`. Falls GitHub Pages im Repository
-noch nicht aktiv ist, schaltet der Workflow es beim ersten Lauf selbst ein;
-andernfalls genügt einmal *Settings → Pages → Source: GitHub Actions*.
+Ein Push baut die App, lässt die Tests laufen und veröffentlicht sie über
+GitHub Pages – siehe `.github/workflows/deploy.yml`.
+
+**Einmalig nötig:** GitHub Pages im Repository einschalten unter
+*Settings → Pages → Build and deployment → Source: **GitHub Actions***. Der
+Workflow versucht das selbst, darf es aber mit seinen Rechten nicht. Danach den
+Lauf wiederholen (*Actions → letzter Lauf → Re-run all jobs*).
+
+Die Adresse lautet anschließend `https://<benutzer>.github.io/<repository>/` –
+und genau die öffnest du auf dem Handy, um die App zu installieren.
 
 ## Aufbau des Codes
 
