@@ -7,9 +7,10 @@
  */
 
 const DB_NAME = 'fotogram';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_WORLD = 'world';
 const STORE_PHOTOS = 'photos';
+const STORE_MEDIA = 'media';
 const WORLD_KEY = 'current';
 
 let dbPromise: Promise<IDBDatabase | null> | undefined;
@@ -27,6 +28,7 @@ function openDb(): Promise<IDBDatabase | null> {
         const db = request.result;
         if (!db.objectStoreNames.contains(STORE_WORLD)) db.createObjectStore(STORE_WORLD);
         if (!db.objectStoreNames.contains(STORE_PHOTOS)) db.createObjectStore(STORE_PHOTOS);
+        if (!db.objectStoreNames.contains(STORE_MEDIA)) db.createObjectStore(STORE_MEDIA);
       };
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => {
@@ -94,6 +96,16 @@ export function dbAllPhotoIds(): Promise<string[]> {
   return run<IDBValidKey[]>(STORE_PHOTOS, 'readonly', (s) => s.getAllKeys() as IDBRequest<IDBValidKey[]>).then(
     (keys) => (keys ?? []).map(String),
   );
+}
+
+/** Gefundene Medien zu einer Suchanfrage merken, damit nicht jedes Mal
+ *  neu gesucht werden muss. */
+export function dbGetMedia<T>(query: string): Promise<T | null> {
+  return run<T>(STORE_MEDIA, 'readonly', (s) => s.get(query) as IDBRequest<T>);
+}
+
+export function dbPutMedia(query: string, value: unknown): Promise<boolean> {
+  return run(STORE_MEDIA, 'readwrite', (s) => s.put(value, query) as IDBRequest<unknown>).then((r) => r !== null);
 }
 
 /** Verfuegbarer und belegter Speicherplatz, soweit der Browser ihn verraet. */

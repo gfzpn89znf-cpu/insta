@@ -78,21 +78,35 @@ export function sendMessage(world: World, threadId: string, text: string) {
   raiseCloseness(world, partner.id, 0.04);
 
   const rng = rngFrom(world.seed, thread.id, thread.messages.length);
-  // Grosse Accounts antworten seltener und spaeter.
   const reach = clamp(Math.log10(followerCount(partner) + 10) / 6.5, 0, 1);
-  const willAnswer = chance(rng, clamp(0.95 - reach * 0.55 + closenessOf(world, partner.id) * 0.4, 0.15, 0.98));
+
+  // Ein laufendes Gespraech wird fast immer fortgesetzt - erst recht, wenn
+  // das Gegenueber selbst eine Frage gestellt hat.
+  const ownMessages = thread.messages.filter((m) => !m.call).length;
+  const running = ownMessages > 2;
+  const theyAsked = thread.messages.some((m) => !m.fromUser && !m.call && m.text.includes('?'));
+  const base = 0.95 - reach * 0.55 + closenessOf(world, partner.id) * 0.4;
+  const willAnswer = chance(rng, clamp(base + (running ? 0.3 : 0) + (theyAsked ? 0.2 : 0), 0.2, 0.99));
   if (!willAnswer) return;
 
-  // Zwischen zwei und zehn Sekunden - lang genug, um echt zu wirken.
-  thread.replyAtReal = Date.now() + randInt(rng, 2000, 9000) + Math.round(reach * 6000);
+  // Im laufenden Gespraech antwortet man schneller als auf die erste Nachricht.
+  const delay = running
+    ? randInt(rng, 1200, 3200) + Math.round(reach * 1500)
+    : randInt(rng, 2000, 6000) + Math.round(reach * 4000);
+  thread.replyAtReal = Date.now() + delay;
   thread.pendingReply = undefined;
   thread.aiWaitUntil = Date.now() + 30000;
+
+  // Nur die juengste Anfrage zaehlt. Schreibt der Nutzer nach, waehrend noch
+  // eine Antwort unterwegs ist, wird die alte verworfen statt zugestellt.
+  thread.replySeq = (thread.replySeq ?? 0) + 1;
+  const seq = thread.replySeq;
 
   // Zuerst die echte KI fragen. Klappt das nicht, schreiben die Bausteine.
   const fallback = () => replyTo(rng, world, partner, clean);
   void askPartner(world, thread.id, partner.id).then((answer) => {
     const current = world.threads[thread.id];
-    if (!current || current.pendingReply) return;
+    if (!current || current.replySeq !== seq) return;
     current.pendingReply = answer ?? fallback();
   });
 }

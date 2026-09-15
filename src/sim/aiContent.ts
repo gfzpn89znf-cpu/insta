@@ -42,7 +42,10 @@ export function ensureCaptions(world: World, posts: Post[], notify: Notify) {
       `   Profil: "${author?.bio ?? ''}"`,
       `   Wesen: ${author ? describeCharacter(author) : 'normal'}`,
       `   Motiv des Fotos: ${topic.label}`,
-    ].join('\n');
+      post.mediaTitle ? `   Auf dem Bild zu sehen: ${post.mediaTitle}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
   });
 
   const system = [
@@ -101,6 +104,7 @@ export function ensureComments(world: World, post: Post, notify: Notify) {
   const system = [
     'Du schreibst Kommentare unter einen Beitrag in einer Foto-App.',
     'Jeder Kommentar stammt von einer anderen Person und muss auch so klingen: unterschiedliche Laenge, Rechtschreibung, Begeisterung.',
+    'Geh auf das ein, was tatsaechlich zu sehen ist - nicht allgemein, sondern konkret zum Bild.',
     'Deutsch, meist 3 bis 12 Woerter. Manche stellen eine Frage, manche loben knapp, manche sind gleichgueltig oder kritisch.',
     'Kein Kommentar darf wie Werbung klingen. Keine Anfuehrungszeichen.',
     `Antworte ausschliesslich mit einem JSON-Array aus genau ${targets.length} Zeichenketten, in derselben Reihenfolge der Personen.`,
@@ -109,6 +113,7 @@ export function ensureComments(world: World, post: Post, notify: Notify) {
   const context = [
     `Beitrag von ${author?.name ?? 'jemandem'} (@${author?.handle ?? '?'})`,
     `Thema: ${NICHES[post.niche].label}, Motiv: ${topic.label}`,
+    post.mediaTitle ? `Auf dem Bild zu sehen: ${post.mediaTitle}` : '',
     post.caption ? `Bildunterschrift: "${post.caption}"` : '',
     '',
     'Diese Personen kommentieren:',
@@ -147,9 +152,12 @@ export async function replyToUserComment(world: World, post: Post, userText: str
   return ask({
     system: [
       `Du bist ${author.name} (@${author.handle}) und hast gerade einen Beitrag ueber ${NICHES[post.niche].label} gepostet (Motiv: ${topic.label}).`,
+      post.mediaTitle ? `Auf deinem Bild ist zu sehen: ${post.mediaTitle}.` : '',
       `Dein Wesen: ${describeCharacter(author)}.`,
       'Jemand hat deinen Beitrag kommentiert. Antworte kurz und persoenlich auf Deutsch, hoechstens zwei Saetze, ohne Anfuehrungszeichen.',
-    ].join('\n'),
+    ]
+      .filter(Boolean)
+      .join('\n'),
     messages: [{ role: 'user', content: userText }],
     maxTokens: 150,
   });

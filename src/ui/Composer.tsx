@@ -1,6 +1,8 @@
 import { useMemo, useRef, useState } from 'react';
 import { NICHES, NICHE_IDS, STYLE_LABELS } from '../sim/niches';
+import { aiReady } from '../sim/ai';
 import { importPhoto, importVideo } from '../sim/photos';
+import { describeUpload, type MediaInsight } from '../sim/vision';
 import { createUserPost } from '../sim/posts';
 import { scoreDraft, type Draft } from '../sim/scoring';
 import { dispatch } from '../sim/store';
@@ -33,6 +35,8 @@ export default function Composer({
   const [format, setFormat] = useState<PostFormat>('photo');
   const [loadingPhoto, setLoadingPhoto] = useState(false);
   const [mediaError, setMediaError] = useState('');
+  const [insight, setInsight] = useState<MediaInsight | null>(null);
+  const [analysing, setAnalysing] = useState(false);
   const galleryRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLInputElement>(null);
@@ -50,11 +54,24 @@ export default function Composer({
     photoId,
     format,
     videoId,
+    mediaTitle: insight?.description,
   };
   const score = useMemo(
     () => scoreDraft(world, user, draft),
     [world.time, niche, topicId, style, caption, tags.join(','), collabId, photoId, videoId, format],
   );
+
+  /** Schaut sich die Aufnahme an und erkennt, worum es geht. */
+  const analyse = async (file: File) => {
+    if (!aiReady()) return;
+    setAnalysing(true);
+    const result = await describeUpload(file);
+    setAnalysing(false);
+    if (!result) return;
+    setInsight(result);
+    // Passendes Thema gleich uebernehmen, den Rest schlaegt die App nur vor.
+    if (result.niche && result.niche !== niche) changeNiche(result.niche);
+  };
 
   const trendTags = world.trends.map((t) => t.tag);
   const suggestedTags = [...new Set([...NICHES[niche].hashtags, ...trendTags])];
@@ -82,10 +99,16 @@ export default function Composer({
     if (!file) return;
     setLoadingPhoto(true);
     setMediaError('');
+    setInsight(null);
     const id = await importPhoto(file);
     setLoadingPhoto(false);
-    if (id) setPhotoId(id);
-    else setMediaError('Das Foto konnte nicht gelesen werden.');
+    if (id) {
+      setPhotoId(id);
+      setVideoId(undefined);
+      void analyse(file);
+    } else {
+      setMediaError('Das Foto konnte nicht gelesen werden.');
+    }
   };
 
   const pickVideo = async (file: File | undefined) => {
@@ -96,7 +119,10 @@ export default function Composer({
     setLoadingPhoto(false);
     if ('id' in result) {
       setVideoId(result.id);
+      setPhotoId(undefined);
       setFormat('reel');
+      setInsight(null);
+      void analyse(file);
     } else {
       setMediaError(result.error);
     }
@@ -202,6 +228,44 @@ export default function Composer({
             }}
           />
           {mediaError && <div className="tip warn"><span>⚠️</span><span>{mediaError}</span></div>}
+
+          {analysing && (
+            <div className="tip">
+              <span>👁</span>
+              <span>Die KI schaut sich deine Aufnahme an...</span>
+            </div>
+          )}
+
+          {insight && (
+            <div className="card insight" style={{ padding: 12, marginTop: 10 }}>
+              <div className="small bold">Erkannt</div>
+              <div className="small muted">{insight.description}</div>
+              <div className="row" style={{ marginTop: 10, flexWrap: 'wrap', gap: 6 }}>
+                {insight.hashtags.length > 0 && (
+                  <button
+                    className="btn secondary sm"
+                    onClick={() => setTags([...new Set([...tags, ...insight.hashtags])].slice(0, 12))}
+                  >
+                    Hashtags uebernehmen
+                  </button>
+                )}
+                {insight.caption && (
+                  <button className="btn secondary sm" onClick={() => setCaption(insight.caption!)}>
+                    Unterschrift vorschlagen
+                  </button>
+                )}
+              </div>
+              {insight.hashtags.length > 0 && (
+                <div className="chips" style={{ marginTop: 8 }}>
+                  {insight.hashtags.map((t) => (
+                    <button key={t} className={`chip${tags.includes(t) ? ' on' : ''}`} onClick={() => toggleTag(t)}>
+                      #{t}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           {format === 'reel' && !videoId && (
             <div className="hint">
               Ohne eigenes Video wird dein Motiv als bewegter Clip gezeigt. Mit „🎬 Video" laedst du eine echte Aufnahme hoch.

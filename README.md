@@ -124,6 +124,11 @@ funktioniert offline, kostet nichts und erkennt inzwischen auch direkte Fragen
 Mit einem eigenen API-Schlüssel von Anthropic (*Einstellungen → Künstliche
 Intelligenz*) übernimmt ein Claude-Modell:
 
+- **Bilderkennung** – lädst du ein Foto oder Video hoch, schaut sich das Modell
+  die Aufnahme an (bei Videos ein Einzelbild aus der Mitte), erkennt das Thema
+  und schlägt Hashtags und eine Bildunterschrift vor. Die Kommentare gehen
+  danach auf das ein, was wirklich zu sehen ist.
+
 - **Unterhaltungen** – jede Antwort wird neu formuliert, passend zu Charakter,
   Reichweite, Tageszeit und eurer bisherigen Nähe.
 - **Anrufe** – du sprichst (Spracherkennung des Browsers), die Person antwortet
@@ -148,10 +153,13 @@ Es gibt mehrere Quellen, und die App fällt automatisch auf die nächste zurück
 1. **Eigene Aufnahmen** – Fotos aus Galerie oder Kamera werden auf maximal
    1280 Pixel verkleinert und als JPEG gespeichert; Videos bis 60 MB landen
    unverändert in IndexedDB. Auch das Profilbild lässt sich so setzen.
-2. **Echte Fotos für die KI-Accounts** – gesucht wird nach dem **Motiv**, nicht
-   nur nach der Nische: „Workout-Routine" liefert Gym-Bilder, „3-Zutaten-Rezept"
-   liefert Essen. Für alle 128 Motive gibt es eigene Suchbegriffe, und die Suche
-   verlangt, dass alle Begriffe zutreffen.
+2. **Echte Fotos und Videos für die KI-Accounts** – gesucht wird in der
+   Volltextsuche von Wikimedia Commons, mit richtigen Stichworten je Motiv
+   („meal prep food containers" statt eines Schlagwort-Kürzels). Zufallsdienste
+   liefern zu einem Kürzel schon mal eine Getreideernte; eine Suche tut das
+   nicht. Jede Suche wird dauerhaft gespeichert und läuft nur einmal.
+   Unter *Einstellungen → Fotos → Bildquellen prüfen* lässt sich direkt
+   nachsehen, was zu einem Motiv gefunden wird.
 3. **Portraits** – KI-Accounts haben echte Gesichter als Profilbild, passend zum
    Vornamen und fest pro Account.
 4. **Gezeichnete Motive** – prozedural aus dem Seed erzeugt. Sie greifen, wenn
@@ -200,6 +208,8 @@ src/
     ai.ts             Anbindung an Claude (Schluessel, Budget, Fehlerbehandlung)
     persona.ts        Beschreibt einen Account so, dass die KI ihn spielen kann
     aiContent.ts      Bildunterschriften und Kommentare von der KI
+    media.ts          Mediensuche bei Wikimedia Commons, mit Zwischenspeicher
+    vision.ts         Erkennt, was auf einer hochgeladenen Aufnahme zu sehen ist
     chat.ts           Unterhaltungen und Antwortlogik
     calls.ts          Anrufe: wer rangeht und was gesagt wird
     world.ts          Welterzeugung inkl. simulierter Vorgeschichte, in Haeppchen

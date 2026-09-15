@@ -39,11 +39,14 @@ export function planCall(world: World, accountId: string, video: boolean): CallP
   const night = hour < 7 || hour >= 23;
   const followsYou = partner.following.includes(world.user.accountId);
 
-  let p = 0.25 + closeness * 0.55 + partner.traits.sociability * 0.25 - reach * 0.35;
-  if (followsYou) p += 0.2;
-  if (night) p -= 0.45;
-  if (video) p -= 0.12; // Videoanrufe nehmen weniger Leute spontan an
-  const answers = chance(rng, clamp(p, 0.03, 0.95));
+  // Die meisten Menschen gehen ran. Schwierig wird es bei sehr grossen
+  // Accounts und nachts - vorher ging praktisch nie jemand ran.
+  let p = 0.95 - reach * 0.6 + closeness * 0.2 + partner.traits.sociability * 0.1;
+  if (reach > 0.8) p -= 0.25; // Stars haben selten Zeit fuer Unbekannte
+  if (followsYou) p += 0.1;
+  if (night) p -= 0.3;
+  if (video) p -= 0.08; // Videoanrufe nimmt man seltener spontan an
+  const answers = chance(rng, clamp(p, 0.05, 0.97));
 
   const niche = NICHES[partner.niche];
   const first = partner.name.split(' ')[0];
@@ -51,7 +54,7 @@ export function planCall(world: World, accountId: string, video: boolean): CallP
   if (!answers) {
     return {
       answers: false,
-      ringMs: randInt(rng, 6000, 11000),
+      ringMs: randInt(rng, 5000, 8000),
       greeting: '',
       lines: [],
       reason: night
@@ -84,7 +87,7 @@ export function planCall(world: World, accountId: string, video: boolean): CallP
 
   return {
     answers: true,
-    ringMs: randInt(rng, 2500, 6000),
+    ringMs: randInt(rng, 2000, 4500),
     greeting,
     lines: pickMany(rng, pool, randInt(rng, 4, 7)),
   };

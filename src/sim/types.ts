@@ -156,6 +156,14 @@ export interface Post {
   format: PostFormat;
   /** Id des gespeicherten Videos (bei eigenen Aufnahmen). */
   videoId?: string;
+  /** Gefundenes Foto aus der Mediensuche. */
+  mediaUrl?: string;
+  /** Gefundenes Video aus der Mediensuche. */
+  mediaVideo?: string;
+  /** Was auf dem Bild zu sehen ist - auch als Kontext fuer die KI. */
+  mediaTitle?: string;
+  /** Suche wurde schon versucht (auch erfolglos). */
+  mediaTried?: boolean;
   /** Intrinsische Qualitaet 0..1 - das Herz der Reichweitenberechnung. */
   quality: number;
   /** Aktuelle Algorithmus-Bewertung 0..~2, entwickelt sich mit dem Engagement. */
@@ -267,6 +275,11 @@ export interface DmThread {
   pendingReply?: string;
   /** Bis wann auf die KI gewartet wird, bevor die Textbausteine einspringen. */
   aiWaitUntil?: number;
+  /**
+   * Zaehler der Antwortauftraege. Schreibt der Nutzer nach, gilt nur noch die
+   * juengste Anfrage - sonst gewinnt eine veraltete Antwort das Rennen.
+   */
+  replySeq?: number;
 }
 
 export interface Trend {

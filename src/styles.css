@@ -472,6 +472,12 @@ a { color: inherit; text-decoration: none; }
 .score-row .val { width: 34px; text-align: right; color: var(--text-faint); }
 
 .tip.warn { border-left-color: var(--red); }
+.card.insight { border-left: 3px solid var(--green); }
+
+.check-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px; }
+.check-grid figure { margin: 0; }
+.check-grid img { width: 100%; aspect-ratio: 1/1; object-fit: cover; border-radius: 8px; background: var(--surface-2); display: block; }
+.check-grid figcaption { font-size: 10px; color: var(--text-faint); margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .tip {
   display: flex;

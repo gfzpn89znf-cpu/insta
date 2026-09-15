@@ -119,6 +119,7 @@ export function describePost(world: World, post: Post): string {
   const topic = getTopic(post.niche, post.topic);
   return [
     `Beitrag von @${author?.handle ?? 'jemand'} (${NICHES[post.niche].label}, Motiv: ${topic.label})`,
+    post.mediaTitle ? `Auf dem Bild: ${post.mediaTitle}` : '',
     post.caption ? `Bildunterschrift: "${post.caption}"` : '',
     post.hashtags.length ? `Hashtags: ${post.hashtags.map((t) => `#${t}`).join(' ')}` : '',
   ]

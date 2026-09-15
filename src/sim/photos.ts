@@ -68,7 +68,7 @@ async function loadBitmap(file: File): Promise<ImageBitmap | HTMLImageElement> {
 }
 
 /** Groesste Datei, die als Reel gespeichert wird. */
-export const MAX_VIDEO_BYTES = 60 * 1024 * 1024;
+export const MAX_VIDEO_BYTES = 200 * 1024 * 1024;
 
 /**
  * Legt ein eigenes Video ab. Videos werden nicht umgerechnet - dafuer fehlt
@@ -77,7 +77,11 @@ export const MAX_VIDEO_BYTES = 60 * 1024 * 1024;
 export async function importVideo(file: File): Promise<{ id: string } | { error: string }> {
   if (!file.type.startsWith('video/')) return { error: 'Das ist keine Videodatei.' };
   if (file.size > MAX_VIDEO_BYTES) {
-    return { error: `Das Video ist ${(file.size / 1024 / 1024).toFixed(0)} MB gross. Bitte hoechstens ${MAX_VIDEO_BYTES / 1024 / 1024} MB.` };
+    return {
+      error: `Das Video ist ${(file.size / 1024 / 1024).toFixed(0)} MB gross - hoechstens ${
+        MAX_VIDEO_BYTES / 1024 / 1024
+      } MB sind moeglich. Tipp: im Fotos-App kuerzen oder in geringerer Aufloesung aufnehmen.`,
+    };
   }
   const id = `vd${Date.now().toString(36)}${(counter++).toString(36)}`;
   if (!(await dbPutPhoto(id, file))) return { error: 'Das Video konnte nicht gespeichert werden.' };

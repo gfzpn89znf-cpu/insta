@@ -257,6 +257,89 @@ function describeError(error: unknown): string {
   return err?.message ? `Fehler: ${err.message}` : 'Unbekannter Fehler.';
 }
 
+/**
+ * Anfrage mit Bild: Claude schaut sich die Aufnahme an und beschreibt, was
+ * darauf zu sehen ist. Damit weiss die App, worum es in einem eigenen
+ * Beitrag wirklich geht.
+ */
+export async function askVision(
+  system: string,
+  text: string,
+  image: { data: string; mediaType: string },
+  maxTokens = 400,
+): Promise<string | null> {
+  const settings = getAiSettings();
+  if (!settings.apiKey) return null;
+
+  const usage = getUsage();
+  if (usage.requests >= settings.dailyBudget) return null;
+
+  const api = await getClient();
+  if (!api) return null;
+
+  await acquire();
+  try {
+    const response = await api.messages.create({
+      model: settings.model,
+      max_tokens: maxTokens,
+      system,
+      output_config: { effort: 'low' },
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'image',
+              source: {
+                type: 'base64',
+                media_type: image.mediaType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
+                data: image.data,
+              },
+            },
+            { type: 'text', text },
+          ],
+        },
+      ],
+    });
+
+    const current = getUsage();
+    saveUsage({
+      ...current,
+      requests: current.requests + 1,
+      inputTokens: current.inputTokens + (response.usage?.input_tokens ?? 0),
+      outputTokens: current.outputTokens + (response.usage?.output_tokens ?? 0),
+    });
+
+    if (response.stop_reason === 'refusal') return null;
+    const out = response.content
+      .filter((block): block is Anthropic.TextBlock => block.type === 'text')
+      .map((block) => block.text)
+      .join('\n')
+      .trim();
+    return out || null;
+  } catch (error) {
+    const current = getUsage();
+    saveUsage({ ...current, errors: current.errors + 1, lastError: describeError(error) });
+    return null;
+  } finally {
+    release();
+  }
+}
+
+/** Holt aus einer Antwort das erste JSON-Objekt heraus. */
+export function parseJsonObject(text: string | null): Record<string, unknown> | null {
+  if (!text) return null;
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
+  if (start < 0 || end <= start) return null;
+  try {
+    const value = JSON.parse(text.slice(start, end + 1));
+    return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Prueft einen Schluessel mit einer winzigen Anfrage. */
 export async function testAiKey(apiKey: string, model: string): Promise<{ ok: boolean; message: string }> {
   try {

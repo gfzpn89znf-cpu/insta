@@ -108,6 +108,7 @@ export function createUserPost(world: World, draft: Draft): Post {
     photoId: draft.photoId,
     format: draft.format ?? 'photo',
     videoId: draft.videoId,
+    mediaTitle: draft.mediaTitle,
     // Etwas Glueck bleibt immer im Spiel - aber Qualitaet dominiert.
     quality: clamp(breakdown.total * 0.92 + gauss(rng, 0.04, 0.05), 0.03, 0.995),
     algoScore: initialAlgoScore(account, breakdown.total),

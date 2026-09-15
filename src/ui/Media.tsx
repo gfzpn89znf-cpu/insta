@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { drawAvatar, drawPostImage } from '../sim/image';
+import { resolvePostMedia } from '../sim/media';
 import { guessFemale } from '../sim/names';
 import { photoUrl, portraitUrl, stockPhotoUrls } from '../sim/photos';
+import { touch } from '../sim/store';
 import type { Account, AvatarSpec, NicheId, Post, StyleId } from '../sim/types';
 
 /** Adresse eines gespeicherten Fotos laden. */
@@ -92,15 +94,32 @@ export function PostMedia({
   const uploaded = usePhotoUrl(post.photoSource === 'upload' ? post.photoId : undefined);
   const [sourceIndex, setSourceIndex] = useState(0);
   const useStock = post.photoSource === 'stock' && stockEnabled;
-  const candidates = useStock ? stockPhotoUrls(post.imageSeed, post.niche, size, post.topic) : [];
+
+  // Erst das gesuchte Foto zum Motiv, dann die allgemeinen Dienste.
+  const candidates = useStock
+    ? [...(post.mediaUrl ? [post.mediaUrl] : []), ...stockPhotoUrls(post.imageSeed, post.niche, size, post.topic)]
+    : [];
 
   useEffect(() => {
     setSourceIndex(0);
-  }, [post.id, size]);
+  }, [post.id, post.mediaUrl, size]);
+
+  // Passendes Motiv einmalig suchen lassen.
+  useEffect(() => {
+    if (!useStock || post.mediaTried || post.mediaUrl) return;
+    void resolvePostMedia(post).then((changed) => {
+      if (changed) touch();
+    });
+  }, [post.id, useStock]);
+
+  if (post.videoId) {
+    // Eigene Videos laufen auch im Feed, nicht nur im Reels-Bereich.
+    return <FeedVideo videoId={post.videoId} />;
+  }
 
   if (post.photoSource === 'upload') {
     if (!uploaded) return <div className="media-placeholder" />;
-    return <img className="media-img" src={uploaded} alt="" loading="lazy" decoding="async" />;
+    return <img className="media-img" src={uploaded} alt={post.mediaTitle ?? ''} loading="lazy" decoding="async" />;
   }
 
   if (useStock && sourceIndex < candidates.length) {
@@ -108,7 +127,7 @@ export function PostMedia({
       <img
         className="media-img"
         src={candidates[sourceIndex]}
-        alt=""
+        alt={post.mediaTitle ?? ''}
         loading={eager ? 'eager' : 'lazy'}
         decoding="async"
         referrerPolicy="no-referrer"
@@ -129,6 +148,31 @@ let stockAllowed = true;
 
 export function setStockPhotosAllowed(value: boolean) {
   stockAllowed = value;
+}
+
+/** Eigenes Video im Feed: laeuft stumm, sobald es sichtbar wird. */
+function FeedVideo({ videoId }: { videoId: string }) {
+  const url = usePhotoUrl(videoId);
+  const ref = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) void el.play().catch(() => undefined);
+          else el.pause();
+        }
+      },
+      { threshold: 0.5 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [url]);
+
+  if (!url) return <div className="media-placeholder" />;
+  return <video ref={ref} className="media-img" src={url} muted loop playsInline preload="metadata" />;
 }
 
 /** Profilbild: eigenes Foto, echtes Portrait oder gezeichneter Avatar. */
@@ -201,8 +245,19 @@ export function ReelMedia({
   muted: boolean;
   stockEnabled?: boolean;
 }) {
-  const videoUrl = usePhotoUrl(post.videoId);
+  const ownVideo = usePhotoUrl(post.videoId);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [videoFailed, setVideoFailed] = useState(false);
+
+  // Passendes Video einmalig suchen lassen.
+  useEffect(() => {
+    if (post.videoId || post.mediaVideo || post.mediaTried || !stockEnabled) return;
+    void resolvePostMedia(post).then((changed) => {
+      if (changed) touch();
+    });
+  }, [post.id, stockEnabled]);
+
+  const source = post.videoId ? ownVideo : stockEnabled && !videoFailed ? post.mediaVideo : undefined;
 
   useEffect(() => {
     const el = videoRef.current;
@@ -214,19 +269,22 @@ export function ReelMedia({
       el.pause();
       el.currentTime = 0;
     }
-  }, [active, videoUrl]);
+  }, [active, source]);
 
-  if (post.videoId) {
-    if (!videoUrl) return <div className="media-placeholder" />;
+  if (post.videoId && !ownVideo) return <div className="media-placeholder" />;
+
+  if (source) {
     return (
       <video
         ref={videoRef}
         className="reel-media"
-        src={videoUrl}
+        src={source}
         muted={muted}
         loop
         playsInline
         preload="metadata"
+        // Spielt der Browser das Format nicht ab, zeigen wir das Motiv bewegt.
+        onError={() => setVideoFailed(true)}
       />
     );
   }

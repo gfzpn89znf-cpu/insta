@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { updateProfile } from '../sim/actions';
 import { AI_MODELS, getAiSettings, getUsage, onAiChange, setAiSettings, testAiKey } from '../sim/ai';
 import { storageEstimate } from '../sim/db';
+import { queryFor, searchImages, searchVideos, type MediaHit } from '../sim/media';
+import { portraitUrl } from '../sim/photos';
 import { importPhoto, pruneOrphanPhotos } from '../sim/photos';
 import { dispatch, resetWorld, saveNow, setSpeed } from '../sim/store';
 import type { World } from '../sim/types';
@@ -172,6 +174,8 @@ export default function Settings({
                 verfuegbarem Speicher.
               </div>
             )}
+            <MediaCheck />
+
             <button
               className="btn secondary full"
               style={{ marginTop: 8 }}
@@ -224,6 +228,93 @@ export default function Settings({
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Prueft direkt auf dem Geraet, ob die Bildquellen erreichbar sind und was
+ * sie zu einem Motiv liefern. Ohne diese Ansicht bliebe nur Raten, wenn ein
+ * Bild nicht passt.
+ */
+function MediaCheck() {
+  const [running, setRunning] = useState(false);
+  const [images, setImages] = useState<MediaHit[] | null>(null);
+  const [videos, setVideos] = useState<MediaHit[] | null>(null);
+  const [portraitOk, setPortraitOk] = useState<boolean | null>(null);
+  const [topic, setTopic] = useState('fitness:mealprep');
+
+  const check = async () => {
+    setRunning(true);
+    setImages(null);
+    setVideos(null);
+    setPortraitOk(null);
+    const [niche, topicId] = topic.split(':');
+    const query = queryFor(niche as never, topicId);
+
+    const [foundImages, foundVideos] = await Promise.all([searchImages(query, 320), searchVideos(query)]);
+    setImages(foundImages);
+    setVideos(foundVideos);
+
+    // Portraitdienst getrennt pruefen - er kommt aus einer anderen Quelle.
+    await new Promise<void>((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        setPortraitOk(true);
+        resolve();
+      };
+      img.onerror = () => {
+        setPortraitOk(false);
+        resolve();
+      };
+      img.src = portraitUrl('pruefung', true, 128);
+    });
+
+    setRunning(false);
+  };
+
+  return (
+    <div className="card" style={{ padding: 14, marginTop: 10 }}>
+      <div className="small bold">Bildquellen pruefen</div>
+      <p className="small muted" style={{ marginTop: 4 }}>
+        Zeigt, was zu einem Motiv tatsaechlich gefunden wird. Passt etwas nicht, siehst du es hier sofort.
+      </p>
+      <select className="select" id="media-check-topic" value={topic} onChange={(e) => setTopic(e.target.value)}>
+        <option value="fitness:mealprep">Fitness · Meal Prep</option>
+        <option value="fitness:workout">Fitness · Workout-Routine</option>
+        <option value="food:rezept">Food · Rezept</option>
+        <option value="pets:welpe">Tiere · Welpen-Update</option>
+        <option value="travel:sonnenaufgang">Reisen · Sonnenaufgang</option>
+        <option value="dance:choreo">Tanz · Choreografie</option>
+        <option value="cars:youngtimer">Autos · Youngtimer</option>
+      </select>
+      <button className="btn secondary full" style={{ marginTop: 8 }} disabled={running} onClick={() => void check()}>
+        {running ? 'Wird geprueft...' : 'Jetzt pruefen'}
+      </button>
+
+      {images !== null && (
+        <div style={{ marginTop: 12 }}>
+          <div className="small">
+            {images.length > 0 ? `✅ ${images.length} Fotos gefunden` : '⚠️ Keine Fotos gefunden - es wird gezeichnet'}
+          </div>
+          <div className="check-grid">
+            {images.slice(0, 6).map((hit) => (
+              <figure key={hit.url}>
+                <img src={hit.url} alt="" loading="lazy" referrerPolicy="no-referrer" />
+                <figcaption>{hit.title}</figcaption>
+              </figure>
+            ))}
+          </div>
+          <div className="small" style={{ marginTop: 8 }}>
+            {videos && videos.length > 0
+              ? `✅ ${videos.length} Videos gefunden: ${videos[0].title}`
+              : '⚠️ Keine abspielbaren Videos - Reels zeigen dann bewegte Fotos'}
+          </div>
+          <div className="small">
+            {portraitOk === null ? '' : portraitOk ? '✅ Profilfotos erreichbar' : '⚠️ Profilfotos nicht erreichbar'}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

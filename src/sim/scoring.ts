@@ -17,6 +17,8 @@ export interface Draft {
   format?: PostFormat;
   /** Eigenes Video fuer ein Reel. */
   videoId?: string;
+  /** Was auf der Aufnahme zu sehen ist (von der Bilderkennung). */
+  mediaTitle?: string;
 }
 
 const SPAM_TAGS = ['followme', 'follow4follow', 'f4f', 'likeforlike', 'l4l', 'followback', 'gainpost', 'spam'];
