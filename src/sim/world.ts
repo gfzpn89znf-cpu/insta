@@ -6,8 +6,11 @@ import { followerCount } from './scoring';
 import type { Account, NicheId, World } from './types';
 
 export const WORLD_VERSION = 1;
-/** Startzeitpunkt der Simulation in Minuten (entspricht Tag 60). */
-const START_TIME = 60 * 24 * 60;
+/**
+ * Startzeitpunkt der Simulation: Tag 60, 18 Uhr. Am Abend ist die
+ * Zielgruppe online - der erste Beitrag hat also eine faire Chance.
+ */
+const START_TIME = 60 * 24 * 60 + 18 * 60;
 /** Tage Vorgeschichte, die beim Erstellen der Welt durchgerechnet werden. */
 const BOOTSTRAP_DAYS = 7;
 /** Simulationszeit pro Rechenhaeppchen (Minuten). */
@@ -69,8 +72,9 @@ export function beginWorld(seed: number, profile: UserProfile, options: WorldOpt
       seenStories: [],
       deals: [],
       bestStreak: 0,
+      closeness: {},
     },
-    settings: { speed: 20, paused: false, population: DEFAULT_POPULATION, attentionCapacity: Infinity },
+    settings: { speed: 20, paused: false, population: DEFAULT_POPULATION, attentionCapacity: Infinity, stockPhotos: true },
     attention: { demand: 0, rate: 0, factor: 1 },
     counter: 1,
     log: [],

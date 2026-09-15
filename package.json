@@ -6,7 +6,7 @@
   "description": "Fotogram - eine voll funktionsfaehige Instagram-aehnliche App mit simulierten KI-Accounts",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && node scripts/postbuild.mjs",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",

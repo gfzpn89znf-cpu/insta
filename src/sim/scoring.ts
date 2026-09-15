@@ -11,6 +11,8 @@ export interface Draft {
   collabId?: string;
   /** Optionaler Bild-Seed, damit Vorschau und Veroeffentlichung identisch sind. */
   imageSeed?: number;
+  /** Eigenes Foto statt eines gezeichneten Motivs. */
+  photoId?: string;
 }
 
 const SPAM_TAGS = ['followme', 'follow4follow', 'f4f', 'likeforlike', 'l4l', 'followback', 'gainpost', 'spam'];
@@ -176,7 +178,8 @@ export function scoreDraft(world: World, account: Account, draft: Draft): Qualit
   const motiv = clamp(topic.core * 0.45 + topic.broad * 0.55, 0, 1);
   if (topic.broad < 0.55) hints.push(`"${topic.label}" spricht vor allem deine Stammleser an, kaum neue Leute.`);
 
-  const stil = styleFit(draft.niche, draft.style);
+  // Ein echtes Foto wirkt fast immer glaubwuerdiger als ein Filter-Look.
+  const stil = draft.photoId ? 0.92 : styleFit(draft.niche, draft.style);
   if (stil < 0.7) hints.push(`Der Stil passt optisch nicht optimal zu ${NICHES[draft.niche].label}.`);
 
   const cap = scoreCaption(draft.caption);

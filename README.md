@@ -2,12 +2,21 @@
 
 Ein voll funktionsfähiges Foto-Netzwerk im Stil von Instagram – inklusive einer
 Welt aus **220 eigenständigen KI-Accounts**, die posten, einander folgen,
-kommentieren, wachsen, stagnieren oder berühmt werden. Du startest bei null
-Followern und versuchst, dich zwischen ihnen durchzusetzen.
+kommentieren, chatten, telefonieren, wachsen, stagnieren oder berühmt werden.
+Du startest bei null Followern und versuchst, dich zwischen ihnen durchzusetzen.
 
-Alles läuft lokal im Browser: kein Server, kein Account, keine API-Schlüssel.
-Auch die Bilder entstehen im Browser – jeder Beitrag wird prozedural aus seinem
-Seed gezeichnet und sieht nach dem Neuladen exakt gleich aus.
+Fotogram ist eine **installierbare App**: auf dem Handy landet sie mit eigenem
+Icon neben den anderen Apps, startet im Vollbild und funktioniert auch ohne
+Internet. Die Simulation läuft vollständig auf dem Gerät – kein Server, kein
+Konto, keine API-Schlüssel.
+
+## Auf dem Handy installieren
+
+1. Die veröffentlichte Adresse im Browser öffnen (siehe *Veröffentlichen*).
+2. **iPhone (Safari):** Teilen-Symbol → „Zum Home-Bildschirm".
+   **Android (Chrome):** Menü ⋮ → „App installieren" – oder in Fotogram unter
+   *Einstellungen → App → Fotogram installieren*.
+3. Fertig: eigenes Icon, Vollbild, kein Browser-Rahmen.
 
 ## Starten
 
@@ -28,13 +37,16 @@ npm run build:single  # alles in eine eigenstaendige HTML-Datei buendeln
 | Bereich | Inhalt |
 | --- | --- |
 | **Feed** | Beiträge abonnierter Accounts, gemischt mit algorithmischen Empfehlungen, Stories, Likes, Kommentare, Speichern |
-| **Erstellen** | Motiv, Bildstil, Bildunterschrift, Hashtags, Kollaboration – mit Live-Analyse und konkreten Verbesserungstipps |
+| **Erstellen** | Eigene Fotos aus Galerie oder Kamera, sonst ein gezeichnetes Motiv; dazu Thema, Bildunterschrift, Hashtags, Kollaboration – mit Live-Analyse und konkreten Verbesserungstipps |
+| **Nachrichten** | Freie Unterhaltungen mit jedem Account. Die Antworten richten sich nach Persönlichkeit, Reichweite und eurer bisherigen Nähe – und kommen mit Verzögerung |
+| **Anrufe** | Sprach- und Videoanrufe mit Klingeln, Annehmen, Gesprächsdauer und gesprochenen Antworten. Nicht jeder geht ran: nachts, bei sehr großen Accounts oder wenig Nähe klingelt es vergeblich |
 | **Entdecken** | Explore-Raster, Suche nach Accounts und Hashtags, Trend-Hashtags, Rangliste der Szene |
 | **Profile** | Eigenes und fremde Profile, Beitragsraster, Followerverlauf, Follower-/Abo-Listen, Profil bearbeiten |
 | **Aktivitäten** | Likes, Kommentare, neue Follower, Meilensteine, Viral-Meldungen |
-| **Nachrichten** | Fans, Kooperationsanfragen von Marken (mit Verhandeln/Ablehnen), Kollaborationen, Agenturen, Hater |
+| **Kooperationen** | Anfragen von Marken (mit Verhandeln/Ablehnen), Kollaborationen, Agenturen, Fans und Hater – jeweils mit Folgen für Follower, Einnahmen und Ruf |
 | **Statistiken** | Followerentwicklung, Reichweite, Interaktionsrate, beste Uhrzeiten, welche Motive bei deinem Publikum wirken, Tabelle aller Beiträge |
 | **Simulation** | Uhrzeit, Pause und vier Geschwindigkeiten; die Welt läuft weiter, während du weg bist |
+| **Navigation** | Jeder Unterbildschirm hat einen Zurück-Pfeil, und die Zurück-Geste des Handys führt denselben Weg zurück |
 
 ## Wie die Simulation funktioniert
 
@@ -100,6 +112,28 @@ Gemessen über die Kalibrierungsläufe in `src/sim/__tests__/sim.test.ts`:
 
 Ab 1.000 Followern melden sich Marken, ab 100.000 gibt es das blaue Häkchen.
 
+## Fotos
+
+Es gibt drei Bildquellen, und die App fällt automatisch auf die nächste zurück:
+
+1. **Eigene Fotos** – aus der Galerie oder direkt aus der Kamera. Sie werden auf
+   maximal 1280 Pixel verkleinert, als JPEG gespeichert und liegen in IndexedDB,
+   überstehen also jeden Neustart. Auch das Profilbild lässt sich so setzen.
+2. **Echte Fotos für die KI-Accounts** – passend zur Nische von einem
+   öffentlichen Fotodienst. Abschaltbar unter *Einstellungen → Fotos*.
+3. **Gezeichnete Motive** – prozedural aus dem Seed des Beitrags erzeugt. Sie
+   greifen immer dann, wenn kein Internet da ist oder der Fotodienst nicht
+   antwortet, und sehen nach dem Neuladen exakt gleich aus.
+
+## Veröffentlichen
+
+Ein Push auf `main` (oder den Entwicklungszweig) baut die App, lässt die Tests
+laufen und veröffentlicht sie über GitHub Pages – siehe
+`.github/workflows/deploy.yml`. Die Adresse lautet dann
+`https://<benutzer>.github.io/<repository>/`. Falls GitHub Pages im Repository
+noch nicht aktiv ist, schaltet der Workflow es beim ersten Lauf selbst ein;
+andernfalls genügt einmal *Settings → Pages → Source: GitHub Actions*.
+
 ## Aufbau des Codes
 
 ```
@@ -117,10 +151,18 @@ src/
     feed.ts           Feed-, Explore- und Ranking-Algorithmen
     actions.ts        Nutzeraktionen mit ihren Konsequenzen
     image.ts          Prozedurale Bild- und Avatarerzeugung auf Canvas
+    photos.ts         Eigene Fotos verkleinern und speichern, Fotoquellen fuer KI
+    db.ts             IndexedDB: Spielstand und Fotos
+    chat.ts           Unterhaltungen und Antwortlogik
+    calls.ts          Anrufe: wer rangeht und was gesagt wird
     world.ts          Welterzeugung inkl. simulierter Vorgeschichte, in Haeppchen
     store.ts          Echtzeitschleife und React-Anbindung
     persistence.ts    Speichern im Browser (mit Notfall-Verkleinerung)
   ui/                 Ansichten und Komponenten
+    nav.ts            Ansichtsstapel, gekoppelt an die Browser-Historie
+    Media.tsx         Fotos, gezeichnete Bilder und Avatare an einer Stelle
+public/
+  manifest.webmanifest, sw.js, icons/   Alles, was die App installierbar macht
 ```
 
 Eine neue Welt wird aus einem Seed erzeugt und anschließend 7 simulierte Tage lang
@@ -145,8 +187,9 @@ langsamen Telefon wenige Sekunden. Dafür sorgen drei Dinge:
 
 ## Spielstand
 
-Der Stand liegt im `localStorage` des Browsers und wird alle acht Sekunden sowie
-beim Schließen gespeichert. Warst du weg, holt die Simulation die verstrichene
+Der Stand liegt in der IndexedDB des Browsers – dort ist genug Platz für Fotos –
+und wird regelmäßig sowie beim Schließen gespeichert. Ältere Stände aus dem
+`localStorage` werden beim ersten Start automatisch übernommen. Warst du weg, holt die Simulation die verstrichene
 Zeit beim nächsten Öffnen nach (maximal drei simulierte Tage). Unter
 *Einstellungen* lässt sich neu anfangen.
 

@@ -451,9 +451,11 @@ function socialStep(world: World, dt: number, notify: boolean) {
     const acc = world.accounts[pick(rng, ids)];
     if (!acc || acc.isUser) continue;
 
-    // Entdeckt neue Accounts in der eigenen Nische und folgt ihnen.
+    // Entdeckt neue Accounts und folgt ihnen. Meistens aus der eigenen
+    // Nische, manchmal aber auch quer dazu - so wie Menschen eben auch.
     if (chance(rng, acc.traits.sociability * 0.55)) {
-      const pool = world.nicheIndex?.[acc.niche] ?? ids;
+      const nichePool = world.nicheIndex?.[acc.niche];
+      const pool = nichePool && nichePool.length > 0 && chance(rng, 0.7) ? nichePool : ids;
       const target = world.accounts[pick(rng, pool)];
       if (target && target.id !== acc.id && !acc.following.includes(target.id)) {
         const attraction = profileAppeal(world, target) * (0.5 + acc.traits.ambition * 0.5);
@@ -467,7 +469,7 @@ function socialStep(world: World, dt: number, notify: boolean) {
     }
 
     // Entfolgt inaktiven oder langweiligen Accounts.
-    if (acc.following.length > 40 && chance(rng, 0.25)) {
+    if (acc.following.length > 12 && chance(rng, 0.25)) {
       const targetId = pick(rng, acc.following);
       const target = world.accounts[targetId];
       if (target && !target.isUser) {

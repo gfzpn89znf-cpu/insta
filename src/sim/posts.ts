@@ -55,6 +55,7 @@ export function createAiPost(world: World, account: Account): Post {
     caption: generateCaption(rng, niche, topic),
     hashtags: generateHashtags(rng, niche, world.trends, account.traits.trendChasing),
     imageSeed: randInt(rng, 1, 2 ** 30),
+    photoSource: world.settings.stockPhotos ? 'stock' : 'generated',
     quality,
     algoScore: initialAlgoScore(account, quality),
     metrics: emptyMetrics(),
@@ -86,7 +87,11 @@ export function createUserPost(world: World, draft: Draft): Post {
     style: draft.style,
     caption: draft.caption,
     hashtags: draft.hashtags.map((t) => t.toLowerCase().replace(/^#/, '')).filter(Boolean),
-    imageSeed: randInt(rng, 1, 2 ** 30),
+    // Der Seed aus der Vorschau, damit veroeffentlichtes Bild und Vorschau
+    // wirklich dasselbe Motiv zeigen.
+    imageSeed: draft.imageSeed ?? randInt(rng, 1, 2 ** 30),
+    photoSource: draft.photoId ? 'upload' : 'generated',
+    photoId: draft.photoId,
     // Etwas Glueck bleibt immer im Spiel - aber Qualitaet dominiert.
     quality: clamp(breakdown.total * 0.92 + gauss(rng, 0.04, 0.05), 0.03, 0.995),
     algoScore: initialAlgoScore(account, breakdown.total),

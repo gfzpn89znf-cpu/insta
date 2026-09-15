@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { markNotificationsRead } from '../sim/actions';
 import { dispatch } from '../sim/store';
 import type { World } from '../sim/types';
-import { Avatar, Verified, relTime } from './common';
+import { AccountAvatar, Verified, relTime } from './common';
 
 const ICONS: Record<string, string> = {
   like: '♥',
@@ -49,7 +49,7 @@ export default function Notifications({
           <div className={`notif${n.read ? '' : ' unread'}`} key={n.id}>
             {actor ? (
               <span onClick={() => onProfile(actor.id)} style={{ cursor: 'pointer', display: 'flex' }}>
-                <Avatar spec={actor.avatar} size={40} />
+                <AccountAvatar account={actor} size={40} />
               </span>
             ) : (
               <span style={{ fontSize: 24, width: 40, textAlign: 'center' }}>{ICONS[n.kind] ?? '🔔'}</span>

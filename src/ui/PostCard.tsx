@@ -4,7 +4,7 @@ import { dispatch } from '../sim/store';
 import { NICHES, getTopic } from '../sim/niches';
 import { topicLabel } from '../sim/posts';
 import type { Post, World } from '../sim/types';
-import { Avatar, CaptionText, PostImage, Verified, followersOf, formatFull, formatShort, relTime } from './common';
+import { AccountAvatar, CaptionText, PostMedia, Verified, followersOf, formatFull, formatShort, relTime } from './common';
 
 interface Props {
   post: Post;
@@ -37,7 +37,7 @@ export default function PostCard({ post, world, onProfile, onOpen, onTag }: Prop
     <article className="card post">
       <header className="post-head">
         <span onClick={() => onProfile(author.id)} style={{ cursor: 'pointer', display: 'flex' }}>
-          <Avatar spec={author.avatar} size={36} />
+          <AccountAvatar account={author} size={36} />
         </span>
         <div className="who">
           <div className="post-handle" onClick={() => onProfile(author.id)} style={{ cursor: 'pointer' }}>
@@ -56,7 +56,7 @@ export default function PostCard({ post, world, onProfile, onOpen, onTag }: Prop
       </header>
 
       <div className="post-media" onDoubleClick={() => dispatch((w) => toggleLike(w, post.id))}>
-        <PostImage seed={post.imageSeed} niche={post.niche} style={post.style} />
+        <PostMedia post={post} size={640} stockEnabled={world.settings.stockPhotos} />
       </div>
 
       <div className="post-actions">
@@ -133,7 +133,7 @@ export default function PostCard({ post, world, onProfile, onOpen, onTag }: Prop
       </div>
 
       <div className="comment-box">
-        <Avatar spec={user.avatar} size={26} />
+        <AccountAvatar account={user} size={26} />
         <input
           value={comment}
           placeholder="Kommentieren..."
@@ -151,10 +151,20 @@ export default function PostCard({ post, world, onProfile, onOpen, onTag }: Prop
 }
 
 /** Kompakte Vorschau fuer Raster-Ansichten. */
-export function GridTile({ post, onOpen, size = 180 }: { post: Post; onOpen: (id: string) => void; size?: number }) {
+export function GridTile({
+  post,
+  onOpen,
+  size = 240,
+  stockEnabled = true,
+}: {
+  post: Post;
+  onOpen: (id: string) => void;
+  size?: number;
+  stockEnabled?: boolean;
+}) {
   return (
     <button className="grid-item" onClick={() => onOpen(post.id)}>
-      <PostImage seed={post.imageSeed} niche={post.niche} style={post.style} size={size} />
+      <PostMedia post={post} size={size} stockEnabled={stockEnabled} />
       <span className="grid-overlay">
         <span>♥ {formatShort(post.metrics.likes)}</span>
         <span>☐ {formatShort(post.metrics.comments)}</span>

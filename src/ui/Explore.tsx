@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { buildExplore, leaderboard, searchAccounts, searchHashtag } from '../sim/feed';
+import { buildExplore, leaderboard, searchAccounts } from '../sim/feed';
 import { NICHES, NICHE_IDS } from '../sim/niches';
 import type { NicheId, World } from '../sim/types';
 import { GridTile } from './PostCard';
@@ -10,45 +10,19 @@ export default function Explore({
   world,
   onProfile,
   onOpen,
-  tag,
   onTag,
 }: {
   world: World;
   onProfile: (id: string) => void;
   onOpen: (id: string) => void;
-  tag: string | null;
-  onTag: (tag: string | null) => void;
+  onTag: (tag: string) => void;
 }) {
   const [query, setQuery] = useState('');
   const [niche, setNiche] = useState<NicheId | null>(null);
 
   const accountHits = useMemo(() => (query ? searchAccounts(world, query, 12) : []), [query, world.time]);
-  const tagPosts = useMemo(() => (tag ? searchHashtag(world, tag, 30) : []), [tag, world.time]);
   const grid = useMemo(() => buildExplore(world, 36, niche ?? undefined), [world.time, niche]);
   const board = useMemo(() => leaderboard(world, 20), [world.time]);
-
-  if (tag) {
-    const heat = world.trends.find((t) => t.tag === tag);
-    return (
-      <div style={{ paddingTop: 18 }}>
-        <div className="row">
-          <button className="btn secondary sm" onClick={() => onTag(null)}>← Zurueck</button>
-          <h2 style={{ margin: 0, fontSize: 20 }}>#{tag}</h2>
-          {heat && <span className="pill hot">🔥 Im Trend</span>}
-        </div>
-        <div className="muted small" style={{ margin: '8px 0 16px' }}>
-          {formatShort(tagPosts.length)} sichtbare Beitraege
-          {heat ? ` · ${formatShort(heat.posts)} Beitraege insgesamt` : ''}
-        </div>
-        <div className="grid">
-          {tagPosts.map((p) => (
-            <GridTile key={p.id} post={p} onOpen={onOpen} />
-          ))}
-        </div>
-        {tagPosts.length === 0 && <div className="empty">Zu diesem Hashtag gibt es gerade nichts.</div>}
-      </div>
-    );
-  }
 
   return (
     <div style={{ paddingTop: 18 }}>
@@ -102,7 +76,7 @@ export default function Explore({
       <div className="section-title">Entdecken</div>
       <div className="grid">
         {grid.map((p) => (
-          <GridTile key={p.id} post={p} onOpen={onOpen} />
+          <GridTile key={p.id} post={p} onOpen={onOpen} stockEnabled={world.settings.stockPhotos} />
         ))}
       </div>
 

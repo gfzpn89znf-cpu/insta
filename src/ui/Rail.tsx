@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { leaderboard, risingStars, suggestions } from '../sim/feed';
 import type { World } from '../sim/types';
 import { SuggestionRow } from './Feed';
-import { Avatar, Verified, followersOf, formatShort, relTime } from './common';
+import { AccountAvatar, Verified, followersOf, formatShort, relTime } from './common';
 
 /** Rechte Spalte: dein Stand, Vorschlaege, Trends, Rangliste, Aktivitaeten. */
 export default function Rail({
@@ -29,7 +29,7 @@ export default function Rail({
   return (
     <aside className="rail">
       <div className="row" style={{ marginBottom: 6 }}>
-        <Avatar spec={user.avatar} size={46} />
+        <AccountAvatar account={user} size={46} />
         <div style={{ minWidth: 0 }}>
           <div className="post-handle" style={{ cursor: 'pointer' }} onClick={() => onProfile(user.id)}>
             {user.handle} <Verified on={user.verified} />
@@ -62,7 +62,7 @@ export default function Rail({
       {top.map((a, i) => (
         <div className="rank-row" key={a.id}>
           <span className="rank-num">{i + 1}</span>
-          <Avatar spec={a.avatar} size={28} />
+          <AccountAvatar account={a} size={28} />
           <div style={{ minWidth: 0, flex: 1 }}>
             <div className="small bold" style={{ cursor: 'pointer' }} onClick={() => onProfile(a.id)}>
               {a.handle} <Verified on={a.verified} />
@@ -77,7 +77,7 @@ export default function Rail({
           <div className="section-title">Wachsen gerade schnell</div>
           {rising.map((a) => (
             <div className="rank-row" key={a.id}>
-              <Avatar spec={a.avatar} size={28} />
+              <AccountAvatar account={a} size={28} />
               <div style={{ minWidth: 0, flex: 1 }}>
                 <div className="small bold" style={{ cursor: 'pointer' }} onClick={() => onProfile(a.id)}>
                   {a.handle}

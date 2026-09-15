@@ -67,6 +67,8 @@ export interface Account {
   niche: NicheId;
   secondNiche: NicheId;
   avatar: AvatarSpec;
+  /** Eigenes Profilfoto statt des gezeichneten Avatars. */
+  photoId?: string;
   isUser: boolean;
   verified: boolean;
   /** Simulationszeit (Minuten) der Account-Erstellung. */
@@ -128,6 +130,9 @@ export interface PostMetrics {
   unfollows: number;
 }
 
+/** Woher das Bild eines Beitrags kommt. */
+export type PhotoSource = 'generated' | 'upload' | 'stock';
+
 export interface Post {
   id: string;
   authorId: string;
@@ -138,6 +143,10 @@ export interface Post {
   caption: string;
   hashtags: string[];
   imageSeed: number;
+  /** Gezeichnet, selbst hochgeladen oder echtes Foto aus dem Netz. */
+  photoSource: PhotoSource;
+  /** Id des gespeicherten Fotos (bei eigenen Aufnahmen). */
+  photoId?: string;
   /** Intrinsische Qualitaet 0..1 - das Herz der Reichweitenberechnung. */
   quality: number;
   /** Aktuelle Algorithmus-Bewertung 0..~2, entwickelt sich mit dem Engagement. */
@@ -219,6 +228,8 @@ export interface DmMessage {
   /** Antwortmoeglichkeiten fuer den Nutzer. */
   options?: DmOption[];
   optionTaken?: string;
+  /** Gespraechsnotiz statt Textnachricht. */
+  call?: { seconds: number; missed: boolean; video: boolean };
 }
 
 export interface DmOption {
@@ -239,6 +250,10 @@ export interface DmThread {
   messages: DmMessage[];
   unread: boolean;
   lastAt: number;
+  /** Reale Uhrzeit (ms), zu der die Antwort eintrifft - 0 heisst: keine offen. */
+  replyAtReal?: number;
+  /** Text, der dann gesendet wird. */
+  pendingReply?: string;
 }
 
 export interface Trend {
@@ -265,6 +280,11 @@ export interface UserState {
   deals: Deal[];
   /** Tage in Folge mit Post. */
   bestStreak: number;
+  /**
+   * Naehe zu einzelnen Accounts (0..1). Waechst durch Unterhaltungen und
+   * Anrufe und macht diese Accounts im eigenen Umfeld praesenter.
+   */
+  closeness: Record<string, number>;
 }
 
 export interface Deal {
@@ -281,6 +301,8 @@ export interface WorldSettings {
   paused: boolean;
   /** Gesamtnutzerzahl der fiktiven Plattform. */
   population: number;
+  /** Echte Fotos fuer die KI-Accounts laden (braucht Internet). */
+  stockPhotos: boolean;
   /**
    * Ansichten pro Tag, die die Plattform der simulierten Creator-Szene
    * insgesamt zuteilt. Wird beim Erzeugen der Welt am Startzustand

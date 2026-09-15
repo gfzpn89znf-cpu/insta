@@ -4,14 +4,14 @@ import { toggleFollow } from '../sim/actions';
 import { dispatch } from '../sim/store';
 import type { Account, World } from '../sim/types';
 import PostCard from './PostCard';
-import { Avatar, StoryAvatar, Verified, followersOf, formatShort } from './common';
+import { AccountAvatar, StoryAvatar, Verified, followersOf, formatShort } from './common';
 
 interface Props {
   world: World;
   onProfile: (id: string) => void;
   onOpen: (id: string) => void;
   onTag: (tag: string) => void;
-  onStories: (accounts: Account[], index: number) => void;
+  onStories: (ids: string[], index: number) => void;
   onCompose: () => void;
 }
 
@@ -27,7 +27,7 @@ export default function Feed({ world, onProfile, onOpen, onTag, onStories, onCom
       {stories.length > 0 && (
         <div className="stories">
           {stories.map((a, i) => (
-            <button key={a.id} className="story" onClick={() => onStories(stories, i)}>
+            <button key={a.id} className="story" onClick={() => onStories(stories.map((s) => s.id), i)}>
               <StoryAvatar account={a} world={world} size={58} />
               <span className="story-name">{a.handle}</span>
             </button>
@@ -78,7 +78,7 @@ export function SuggestionRow({
   return (
     <div className="row" style={{ padding: '7px 0' }}>
       <span onClick={() => onProfile(account.id)} style={{ cursor: 'pointer', display: 'flex' }}>
-        <Avatar spec={account.avatar} size={34} />
+        <AccountAvatar account={account} size={34} />
       </span>
       <div style={{ minWidth: 0, flex: 1 }}>
         <div className="post-handle" style={{ cursor: 'pointer' }} onClick={() => onProfile(account.id)}>

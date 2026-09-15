@@ -4,7 +4,7 @@ import { normalizeHandle } from '../sim/names';
 import { startNewWorld } from '../sim/store';
 import type { NicheId } from '../sim/types';
 
-export default function Onboarding({ canResume, onResume }: { canResume: boolean; onResume: () => void }) {
+export default function Onboarding({ onStarted }: { onStarted: () => void }) {
   const [step, setStep] = useState(0);
   const [name, setName] = useState('');
   const [handle, setHandle] = useState('');
@@ -28,7 +28,7 @@ export default function Onboarding({ canResume, onResume }: { canResume: boolean
       },
       undefined,
       setProgress,
-    );
+    ).then(onStarted);
   };
 
   return (
@@ -39,12 +39,6 @@ export default function Onboarding({ canResume, onResume }: { canResume: boolean
           Ein Foto-Netzwerk mit hunderten eigenstaendigen KI-Accounts. Sie posten, folgen, kommentieren und werden
           beruehmt - oder eben nicht. Deine Aufgabe: dich zwischen ihnen durchsetzen.
         </p>
-
-        {canResume && step === 0 && (
-          <button className="btn full" style={{ marginBottom: 16 }} onClick={onResume}>
-            Gespeicherten Stand fortsetzen
-          </button>
-        )}
 
         {step === 0 && (
           <>
@@ -120,7 +114,7 @@ export default function Onboarding({ canResume, onResume }: { canResume: boolean
                   <span style={{ width: `${Math.max(3, Math.round(progress * 100))}%` }} />
                 </div>
                 <div className="hint center-text">
-                  220 KI-Accounts erleben gerade ihre letzten zehn Tage: Beitraege, Follower, erste Trends.
+                  220 KI-Accounts erleben gerade ihre letzte Woche: Beitraege, Follower, erste Trends.
                 </div>
               </div>
             )}

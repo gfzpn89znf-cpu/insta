@@ -1,14 +1,24 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { NICHES, NICHE_IDS, STYLE_LABELS } from '../sim/niches';
+import { importPhoto } from '../sim/photos';
 import { createUserPost } from '../sim/posts';
 import { scoreDraft, type Draft } from '../sim/scoring';
 import { dispatch } from '../sim/store';
 import type { NicheId, StyleId, World } from '../sim/types';
-import { Meter, PostImage, ScoreRow, formatShort } from './common';
+import { usePhotoUrl } from './Media';
+import { Meter, PostMedia, ScoreRow, formatShort } from './common';
 
 const STYLE_IDS: StyleId[] = ['vivid', 'film', 'mono', 'golden', 'studio', 'neon', 'pastel', 'moody'];
 
-export default function Composer({ world, onDone }: { world: World; onDone: (postId: string) => void }) {
+export default function Composer({
+  world,
+  onDone,
+  onClose,
+}: {
+  world: World;
+  onDone: (postId: string) => void;
+  onClose: () => void;
+}) {
   const user = world.accounts[world.user.accountId];
   const [niche, setNiche] = useState<NicheId>(user.niche);
   const [topicId, setTopicId] = useState(NICHES[user.niche].topics[0].id);
@@ -18,12 +28,29 @@ export default function Composer({ world, onDone }: { world: World; onDone: (pos
   const [custom, setCustom] = useState('');
   const [collabId, setCollabId] = useState('');
   const [seed, setSeed] = useState(() => Math.floor(Math.random() * 1e9));
+  const [photoId, setPhotoId] = useState<string | undefined>();
+  const [loadingPhoto, setLoadingPhoto] = useState(false);
+  const galleryRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
+  const photo = usePhotoUrl(photoId);
 
-  const draft: Draft = { niche, topicId, style, caption, hashtags: tags, collabId: collabId || undefined, imageSeed: seed };
-  const score = useMemo(() => scoreDraft(world, user, draft), [world.time, niche, topicId, style, caption, tags.join(','), collabId]);
+  const draft: Draft = {
+    niche,
+    topicId,
+    style,
+    caption,
+    hashtags: tags,
+    collabId: collabId || undefined,
+    imageSeed: seed,
+    photoId,
+  };
+  const score = useMemo(
+    () => scoreDraft(world, user, draft),
+    [world.time, niche, topicId, style, caption, tags.join(','), collabId, photoId],
+  );
 
   const trendTags = world.trends.map((t) => t.tag);
-  const suggestedTags = [...new Set([...trendTags, ...NICHES[niche].hashtags])];
+  const suggestedTags = [...new Set([...NICHES[niche].hashtags, ...trendTags])];
   const topics = NICHES[niche].topics;
   const following = user.following.map((id) => world.accounts[id]).filter(Boolean);
 
@@ -31,7 +58,7 @@ export default function Composer({ world, onDone }: { world: World; onDone: (pos
     setNiche(n);
     setTopicId(NICHES[n].topics[0].id);
     setStyle(NICHES[n].styles[0] as StyleId);
-    setSeed(Math.floor(Math.random() * 1e9));
+    if (!photoId) setSeed(Math.floor(Math.random() * 1e9));
   };
 
   const toggleTag = (tag: string) => {
@@ -44,6 +71,14 @@ export default function Composer({ world, onDone }: { world: World; onDone: (pos
     setCustom('');
   };
 
+  const pickPhoto = async (file: File | undefined) => {
+    if (!file) return;
+    setLoadingPhoto(true);
+    const id = await importPhoto(file);
+    setLoadingPhoto(false);
+    if (id) setPhotoId(id);
+  };
+
   const publish = () => {
     const post = dispatch((w) => createUserPost(w, draft));
     if (post) onDone(post.id);
@@ -53,15 +88,70 @@ export default function Composer({ world, onDone }: { world: World; onDone: (pos
     score.total > 0.8 ? 'Top-Beitrag' : score.total > 0.62 ? 'Stark' : score.total > 0.45 ? 'Solide' : score.total > 0.3 ? 'Schwach' : 'Wird untergehen';
 
   return (
-    <div className="modal-body">
+    <div className="composer">
+      <header className="screen-head">
+        <button className="back-btn" onClick={onClose} aria-label="Abbrechen">×</button>
+        <div className="screen-title">
+          <div className="screen-title-main">Neuer Beitrag</div>
+        </div>
+        <button className="btn sm grad" onClick={publish}>Teilen</button>
+      </header>
+
       <div className="composer-grid">
         <div>
           <div className="preview-media">
-            <PostImage seed={seed} niche={niche} style={style} size={520} />
+            {photoId ? (
+              photo ? (
+                <img className="media-img" src={photo} alt="Dein Foto" />
+              ) : (
+                <div className="media-placeholder" />
+              )
+            ) : (
+              <PostMedia
+                post={{ ...emptyPreview, imageSeed: seed, niche, style }}
+                size={560}
+                eager
+                stockEnabled={false}
+              />
+            )}
           </div>
-          <button className="btn secondary full sm" style={{ marginTop: 10 }} onClick={() => setSeed(Math.floor(Math.random() * 1e9))}>
-            Anderes Motiv aufnehmen
-          </button>
+
+          <div className="photo-actions">
+            <button className="btn secondary sm" disabled={loadingPhoto} onClick={() => galleryRef.current?.click()}>
+              {loadingPhoto ? 'Foto wird geladen...' : '🖼 Foto waehlen'}
+            </button>
+            <button className="btn secondary sm" disabled={loadingPhoto} onClick={() => cameraRef.current?.click()}>
+              📷 Kamera
+            </button>
+            {photoId ? (
+              <button className="btn ghost sm" onClick={() => setPhotoId(undefined)}>Foto entfernen</button>
+            ) : (
+              <button className="btn ghost sm" onClick={() => setSeed(Math.floor(Math.random() * 1e9))}>
+                Anderes Motiv
+              </button>
+            )}
+          </div>
+          <input
+            ref={galleryRef}
+            type="file"
+            accept="image/*"
+            hidden
+            onChange={(e) => {
+              void pickPhoto(e.target.files?.[0]);
+              e.target.value = '';
+            }}
+          />
+          <input
+            ref={cameraRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            hidden
+            onChange={(e) => {
+              void pickPhoto(e.target.files?.[0]);
+              e.target.value = '';
+            }}
+          />
 
           <span className="label">Nische</span>
           <div className="chips">
@@ -88,20 +178,25 @@ export default function Composer({ world, onDone }: { world: World; onDone: (pos
           </div>
           <div className="hint">🔥 = hohes Potenzial, auch Menschen ausserhalb deiner Nische zu erreichen.</div>
 
-          <span className="label">Bildstil</span>
-          <div className="chips">
-            {STYLE_IDS.map((s) => (
-              <button key={s} className={`chip${s === style ? ' on' : ''}`} onClick={() => setStyle(s)} title={STYLE_LABELS[s].hint}>
-                {STYLE_LABELS[s].label}
-              </button>
-            ))}
-          </div>
+          {!photoId && (
+            <>
+              <span className="label">Bildstil</span>
+              <div className="chips">
+                {STYLE_IDS.map((s) => (
+                  <button key={s} className={`chip${s === style ? ' on' : ''}`} onClick={() => setStyle(s)} title={STYLE_LABELS[s].hint}>
+                    {STYLE_LABELS[s].label}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
         </div>
 
         <div>
           <span className="label">Bildunterschrift</span>
           <textarea
             className="textarea"
+            id="composer-caption"
             value={caption}
             maxLength={900}
             placeholder="Erzaehl etwas Persoenliches. Stell am Ende eine Frage - das bringt Kommentare."
@@ -110,16 +205,19 @@ export default function Composer({ world, onDone }: { world: World; onDone: (pos
           <div className="hint">{caption.length} Zeichen · Ideal sind 40 bis 220.</div>
 
           <span className="label">Hashtags ({tags.length})</span>
-          <div className="chips">
-            {tags.map((t) => (
-              <button key={t} className="chip on" onClick={() => toggleTag(t)}>
-                #{t} ×
-              </button>
-            ))}
-          </div>
+          {tags.length > 0 && (
+            <div className="chips">
+              {tags.map((t) => (
+                <button key={t} className="chip on" onClick={() => toggleTag(t)}>
+                  #{t} ×
+                </button>
+              ))}
+            </div>
+          )}
           <div className="row" style={{ marginTop: 8 }}>
             <input
               className="input"
+              id="composer-tag"
               value={custom}
               placeholder="Eigenen Hashtag hinzufuegen"
               onChange={(e) => setCustom(e.target.value)}
@@ -143,7 +241,7 @@ export default function Composer({ world, onDone }: { world: World; onDone: (pos
           {following.length > 0 && (
             <>
               <span className="label">Kollaboration (optional)</span>
-              <select className="select" value={collabId} onChange={(e) => setCollabId(e.target.value)}>
+              <select className="select" id="composer-collab" value={collabId} onChange={(e) => setCollabId(e.target.value)}>
                 <option value="">Niemanden markieren</option>
                 {following.map((a) => (
                   <option key={a.id} value={a.id}>
@@ -159,14 +257,13 @@ export default function Composer({ world, onDone }: { world: World; onDone: (pos
             <div className="row" style={{ marginBottom: 10 }}>
               <b style={{ fontSize: 17 }}>{Math.round(score.total * 100)}</b>
               <span className="muted small">/ 100 · {grade}</span>
-              <span className="spacer" />
             </div>
             <Meter value={score.total} />
             <div style={{ marginTop: 14 }}>
               <ScoreRow name="Motiv" value={score.motiv} />
               <ScoreRow name="Text" value={score.caption} />
               <ScoreRow name="Hashtags" value={score.hashtags} />
-              <ScoreRow name="Bildstil" value={score.stil} />
+              <ScoreRow name="Bild" value={score.stil} />
               <ScoreRow name="Zeitpunkt" value={score.timing} />
               <ScoreRow name="Regelmaessig" value={score.konsistenz} />
               <ScoreRow name="Nische" value={score.nische} />
@@ -189,10 +286,45 @@ export default function Composer({ world, onDone }: { world: World; onDone: (pos
             Jetzt veroeffentlichen
           </button>
           <div className="hint center-text">
-            Der Algorithmus testet deinen Beitrag zuerst an einer kleinen Gruppe. Was dort gut ankommt, wird weiterverteilt.
+            Der Algorithmus testet deinen Beitrag zuerst an einer kleinen Gruppe. Was dort gut ankommt, wird
+            weiterverteilt.
           </div>
         </div>
       </div>
     </div>
   );
 }
+
+/** Geruest fuer die Vorschau des gezeichneten Motivs. */
+const emptyPreview = {
+  id: 'preview',
+  authorId: 'u0',
+  createdAt: 0,
+  topic: '',
+  caption: '',
+  hashtags: [],
+  photoSource: 'generated' as const,
+  quality: 0.5,
+  algoScore: 1,
+  metrics: {
+    impressions: 0,
+    reachFollowers: 0,
+    reachExplore: 0,
+    likes: 0,
+    comments: 0,
+    saves: 0,
+    shares: 0,
+    newFollowers: 0,
+    unfollows: 0,
+  },
+  likedBy: [],
+  commentList: [],
+  energy: 1,
+  luck: 1,
+  seedNum: 1,
+  lastTick: 0,
+  byUser: true,
+  imageSeed: 1,
+  niche: 'fitness' as NicheId,
+  style: 'vivid' as StyleId,
+};

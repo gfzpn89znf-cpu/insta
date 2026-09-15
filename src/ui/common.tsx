@@ -1,7 +1,7 @@
-import { useEffect, useRef, type ReactNode } from 'react';
-import { drawAvatar, drawPostImage } from '../sim/image';
+import { useEffect, type ReactNode } from 'react';
 import { formatFull, formatShort } from '../sim/content';
-import type { Account, AvatarSpec, NicheId, Post, StyleId, World } from '../sim/types';
+import { AccountAvatar } from './Media';
+import type { Account, Post, World } from '../sim/types';
 
 export { formatShort, formatFull };
 
@@ -37,14 +37,7 @@ export function followingOf(a: Account): number {
 
 /* ---------------- Avatar ---------------- */
 
-export function Avatar({ spec, size = 40 }: { spec: AvatarSpec; size?: number }) {
-  const ref = useRef<HTMLCanvasElement>(null);
-  useEffect(() => {
-    if (ref.current) drawAvatar(ref.current, spec);
-  }, [spec.seed, spec.hue, spec.hue2, spec.shape, spec.initials]);
-  const px = Math.round(size * (typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, 2) : 1));
-  return <canvas ref={ref} className="avatar" width={px} height={px} style={{ width: size, height: size }} />;
-}
+export { Avatar, AccountAvatar, PostMedia, StoryMedia, usePhotoUrl } from './Media';
 
 /** Avatar mit Story-Ring, falls der Account gerade eine Story hat. */
 export function StoryAvatar({
@@ -63,14 +56,14 @@ export function StoryAvatar({
   if (!hasStory) {
     return (
       <span onClick={onClick} style={{ cursor: onClick ? 'pointer' : undefined, display: 'inline-flex' }}>
-        <Avatar spec={account.avatar} size={size} />
+        <AccountAvatar account={account} size={size} />
       </span>
     );
   }
   return (
     <span className={`avatar-ring${seen ? ' seen' : ''}`} onClick={onClick} style={{ cursor: 'pointer' }}>
       <span className="inner">
-        <Avatar spec={account.avatar} size={size} />
+        <AccountAvatar account={account} size={size} />
       </span>
     </span>
   );
@@ -78,60 +71,6 @@ export function StoryAvatar({
 
 export function Verified({ on }: { on: boolean }) {
   return on ? <span className="verified" title="Verifiziert">✔</span> : null;
-}
-
-/* ---------------- Beitragsbild ---------------- */
-
-export function PostImage({
-  seed,
-  niche,
-  style,
-  size = 480,
-  eager = false,
-}: {
-  seed: number;
-  niche: NicheId;
-  style: StyleId;
-  size?: number;
-  /** Sofort zeichnen statt erst beim Sichtbarwerden. */
-  eager?: boolean;
-}) {
-  const ref = useRef<HTMLCanvasElement>(null);
-  const drawn = useRef('');
-
-  useEffect(() => {
-    const canvas = ref.current;
-    if (!canvas) return;
-    const key = `${seed}|${niche}|${style}|${size}`;
-
-    const paint = () => {
-      if (drawn.current === key || !ref.current) return;
-      drawn.current = key;
-      drawPostImage(ref.current, { seed, niche, style });
-    };
-
-    // Ein Feed zeigt Dutzende Bilder. Sie alle sofort zu zeichnen kostet auf
-    // langsamen Geraeten Sekunden - also erst, wenn sie in die Naehe des
-    // Sichtbereichs kommen.
-    if (eager || typeof IntersectionObserver === 'undefined') {
-      paint();
-      return;
-    }
-    drawn.current = '';
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((e) => e.isIntersecting)) {
-          paint();
-          observer.disconnect();
-        }
-      },
-      { rootMargin: '300px 0px' },
-    );
-    observer.observe(canvas);
-    return () => observer.disconnect();
-  }, [seed, niche, style, size, eager]);
-
-  return <canvas ref={ref} width={size} height={size} style={{ background: 'var(--surface-2)' }} />;
 }
 
 /* ---------------- Modal ---------------- */

@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { tick } from './engine';
+import { processChatReplies } from './chat';
 import { clearWorld, loadWorld, onSaveProblem, saveWorld, type SaveListener } from './persistence';
 import { beginWorld, type UserProfile } from './world';
 import type { World } from './types';
@@ -8,7 +9,7 @@ import type { World } from './types';
 const LOOP_MS = 1000;
 /** Maximale Simulationszeit, die nach einer Pause nachgeholt wird (Minuten). */
 const MAX_CATCHUP = 3 * 24 * 60;
-const SAVE_EVERY_MS = 8000;
+const SAVE_EVERY_MS = 15000;
 
 let world: World | null = null;
 let version = 0;
@@ -71,7 +72,7 @@ export async function startNewWorld(
     await nextFrame();
   }
   world = build.world;
-  saveWorld(world);
+  void saveWorld(world);
   emit();
   startLoop();
   return world;
@@ -79,7 +80,7 @@ export async function startNewWorld(
 
 /** Laedt einen gespeicherten Stand und holt die verstrichene Zeit nach. */
 export async function resumeWorld(onProgress?: Progress): Promise<World | null> {
-  const loaded = loadWorld();
+  const loaded = await loadWorld();
   if (!loaded) return null;
   world = loaded;
   const elapsedRealMs = Math.max(0, Date.now() - (loaded.realTime ?? Date.now()));
@@ -105,9 +106,9 @@ export async function resumeWorld(onProgress?: Progress): Promise<World | null> 
   return world;
 }
 
-export function resetWorld() {
+export async function resetWorld() {
   stopLoop();
-  clearWorld();
+  await clearWorld();
   world = null;
   emit();
 }
@@ -115,12 +116,22 @@ export function resetWorld() {
 export function startLoop() {
   if (timer !== undefined) return;
   timer = window.setInterval(() => {
-    if (!world || world.settings.paused) return;
-    const minutes = (world.settings.speed * LOOP_MS) / 1000;
-    tick(world, minutes, { sample: true, notify: true });
+    if (!world) return;
+
+    // Antworten in Unterhaltungen haengen an der echten Uhr - ein Gespraech
+    // laeuft also auch weiter, wenn die Simulation pausiert ist.
+    let changed = processChatReplies(world);
+
+    if (!world.settings.paused) {
+      const minutes = (world.settings.speed * LOOP_MS) / 1000;
+      tick(world, minutes, { sample: true, notify: true });
+      changed = true;
+    }
+
+    if (!changed) return;
     if (Date.now() - lastSave > SAVE_EVERY_MS) {
-      saveWorld(world);
       lastSave = Date.now();
+      void saveWorld(world);
     }
     emit();
   }, LOOP_MS);
@@ -140,8 +151,8 @@ export function setSaveListener(fn: SaveListener | undefined) {
 
 export function saveNow() {
   if (world) {
-    saveWorld(world);
     lastSave = Date.now();
+    void saveWorld(world);
   }
 }
 

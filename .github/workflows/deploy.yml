@@ -1,0 +1,60 @@
+# Baut Fotogram und veroeffentlicht die App ueber GitHub Pages.
+# Danach laesst sie sich auf dem Handy als App installieren.
+name: App veroeffentlichen
+
+on:
+  push:
+    branches:
+      - main
+      - claude/instagram-app-ai-accounts-5ve99o
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Immer nur eine Veroeffentlichung gleichzeitig.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Bauen und pruefen
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Abhaengigkeiten installieren
+        run: npm ci
+
+      - name: Simulation testen
+        run: npm test
+
+      - name: App bauen
+        run: npm run build
+
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    name: Veroeffentlichen
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -205,10 +205,14 @@ describe('KI-Accounts verhalten sich wie Menschen', () => {
 
   it('bauen ueber die Zeit Beziehungen auf oder ab', () => {
     const w = smallWorld(19);
-    const edgesBefore = Object.values(w.accounts).reduce((s, a) => s + a.following.length, 0);
+    // Die Zahl der Verbindungen kann zufaellig gleich bleiben, wenn sich
+    // Folgen und Entfolgen ausgleichen - also die Verbindungen selbst pruefen.
+    const edges = () => new Set(Object.values(w.accounts).flatMap((a) => a.following.map((t) => `${a.id}>${t}`)));
+    const before = edges();
     tick(w, 5 * 1440, { sample: false, notify: false });
-    const edgesAfter = Object.values(w.accounts).reduce((s, a) => s + a.following.length, 0);
-    expect(edgesAfter).not.toBe(edgesBefore);
+    const after = edges();
+    const changed = [...after].some((e) => !before.has(e)) || [...before].some((e) => !after.has(e));
+    expect(changed).toBe(true);
   });
 
   it('werden unterschiedlich erfolgreich', () => {
