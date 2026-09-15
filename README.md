@@ -12,7 +12,9 @@ Konto, keine API-Schlüssel.
 
 ## Auf dem Handy installieren
 
-1. Die veröffentlichte Adresse im Browser öffnen (siehe *Veröffentlichen*).
+**https://gfzpn89znf-cpu.github.io/insta/**
+
+1. Diese Adresse im Browser des Handys öffnen.
 2. **iPhone (Safari):** Teilen-Symbol → „Zum Home-Bildschirm".
    **Android (Chrome):** Menü ⋮ → „App installieren" – oder in Fotogram unter
    *Einstellungen → App → Fotogram installieren*.
@@ -136,7 +138,12 @@ Workflow versucht das selbst, darf es aber mit seinen Rechten nicht. Danach den
 Lauf wiederholen (*Actions → letzter Lauf → Re-run all jobs*).
 
 Die Adresse lautet anschließend `https://<benutzer>.github.io/<repository>/` –
-und genau die öffnest du auf dem Handy, um die App zu installieren.
+für dieses Repository also **https://gfzpn89znf-cpu.github.io/insta/**.
+
+Zu beachten: GitHub veröffentlicht standardmäßig nur aus dem Hauptzweig `main`.
+Wer aus einem Entwicklungszweig veröffentlichen will, muss diesen unter
+*Settings → Environments → github-pages → Deployment branches* zusätzlich
+erlauben.
 
 ## Aufbau des Codes
 
