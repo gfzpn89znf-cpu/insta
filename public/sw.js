@@ -96,7 +96,18 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Fotos von aussen: einmal geladen, bleiben sie auch offline sichtbar.
+  /*
+   * Fotos von aussen: einmal geladen, bleiben sie auch offline sichtbar.
+   *
+   * Nur Bilder, die wirklich angezeigt werden - nichts, was die App selbst
+   * abruft. Sonst laegen Suchanfragen und heruntergeladene Bilder
+   * unverschluesselt im Zwischenspeicher des Browsers, waehrend dieselben
+   * Bilder nebenan mit der PIN gesichert sind. Alles, was ueber fetch laeuft
+   * (Bildersuche, KI, Herunterladen eines gewaehlten Bildes), geht direkt ans
+   * Netz und wird nirgends abgelegt.
+   */
+  if (request.destination !== 'image') return;
+
   event.respondWith(
     caches.match(request, MATCH).then((cached) => {
       if (cached) return cached;

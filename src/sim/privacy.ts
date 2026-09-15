@@ -168,6 +168,16 @@ export async function wipeEverything(): Promise<void> {
   unlocked = false;
   forgetApiKey();
   await dbWipe();
+  // Auch der Bild-Zwischenspeicher des Browsers muss weg.
+  try {
+    if (typeof caches !== 'undefined') {
+      for (const name of await caches.keys()) {
+        if (name.includes('foto')) await caches.delete(name);
+      }
+    }
+  } catch {
+    /* ignorieren */
+  }
   try {
     for (const key of Object.keys(localStorage)) {
       if (key.startsWith('fotogram.')) localStorage.removeItem(key);

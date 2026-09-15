@@ -1237,3 +1237,45 @@ table.data tr:hover td { background: var(--surface); }
   margin-bottom: 8px;
   line-height: 1.5;
 }
+
+/* --------------------------------------------------------------- */
+/* Bildersuche im Beitragsfenster                                   */
+/* --------------------------------------------------------------- */
+
+.picture-search {
+  padding: 12px;
+  margin-top: 8px;
+}
+
+.picture-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-top: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.picture-hit {
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  overflow: hidden;
+  background: var(--surface-2);
+  aspect-ratio: 1 / 1;
+}
+
+.picture-hit:disabled {
+  opacity: 0.5;
+}
+
+.picture-hit img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.picture-hit:hover {
+  border-color: var(--text);
+}

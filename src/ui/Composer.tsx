@@ -3,6 +3,7 @@ import { NICHES, NICHE_IDS, STYLE_LABELS } from '../sim/niches';
 import { aiReady } from '../sim/ai';
 import { importPhoto, importVideo } from '../sim/photos';
 import { getPrivacy } from '../sim/flags';
+import { downloadPicture, searchPictures, type PictureHit } from '../sim/imageSearch';
 import { describeUpload, type MediaInsight } from '../sim/vision';
 import { createUserPost } from '../sim/posts';
 import { scoreDraft, type Draft } from '../sim/scoring';
@@ -38,6 +39,7 @@ export default function Composer({
   const [mediaError, setMediaError] = useState('');
   const [insight, setInsight] = useState<MediaInsight | null>(null);
   const [analysing, setAnalysing] = useState(false);
+  const [searching, setSearching] = useState(false);
   const galleryRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLInputElement>(null);
@@ -128,6 +130,29 @@ export default function Composer({
     } else {
       setMediaError(result.error);
     }
+  };
+
+  /** Ein gefundenes Bild herunterladen und wie ein eigenes Foto ablegen. */
+  const takePicture = async (hit: PictureHit) => {
+    setSearching(true);
+    setMediaError('');
+    const file = await downloadPicture(hit);
+    if (!file) {
+      setSearching(false);
+      setMediaError('Das Bild liess sich nicht laden. Versuch ein anderes aus der Liste.');
+      return;
+    }
+    const id = await importPhoto(file);
+    setSearching(false);
+    if (!id) {
+      setMediaError('Das Bild konnte nicht verarbeitet werden.');
+      return;
+    }
+    setPhotoId(id);
+    setVideoId(undefined);
+    setFormat('photo');
+    setInsight(null);
+    void analyse(file);
   };
 
   const publish = () => {
@@ -229,6 +254,8 @@ export default function Composer({
               e.target.value = '';
             }}
           />
+          <PictureSearch busy={searching || loadingPhoto} onPick={(hit) => void takePicture(hit)} />
+
           {mediaError && <div className="tip warn"><span>⚠️</span><span>{mediaError}</span></div>}
 
           {analysing && (
@@ -460,3 +487,103 @@ const emptyPreview = {
   niche: 'fitness' as NicheId,
   style: 'vivid' as StyleId,
 };
+
+/**
+ * Eigene Bildersuche: Suchbegriff eingeben, aus den Treffern eines
+ * auswaehlen. Das gewaehlte Bild wird heruntergeladen und liegt danach
+ * genauso auf dem Geraet wie ein selbst aufgenommenes Foto.
+ */
+function PictureSearch({ busy, onPick }: { busy: boolean; onPick: (hit: PictureHit) => void }) {
+  const [open, setOpen] = useState(false);
+  const [term, setTerm] = useState('');
+  const [running, setRunning] = useState(false);
+  const [hits, setHits] = useState<PictureHit[] | null>(null);
+  const [used, setUsed] = useState('');
+  const [error, setError] = useState('');
+  const offline = getPrivacy().offline;
+
+  const run = async () => {
+    if (!term.trim() || running) return;
+    setRunning(true);
+    setError('');
+    setHits(null);
+    const outcome = await searchPictures(term);
+    setRunning(false);
+    setHits(outcome.hits);
+    setUsed(outcome.usedQuery);
+    setError(outcome.error ?? '');
+  };
+
+  if (!open) {
+    return (
+      <button className="btn secondary full" style={{ marginTop: 8 }} onClick={() => setOpen(true)}>
+        🔎 Bild im Netz suchen
+      </button>
+    );
+  }
+
+  return (
+    <div className="card picture-search">
+      <div className="row" style={{ justifyContent: 'space-between' }}>
+        <b className="small">Bild suchen</b>
+        <button className="btn ghost sm" onClick={() => setOpen(false)}>Schliessen</button>
+      </div>
+
+      {offline ? (
+        <div className="tip warn" style={{ marginTop: 8 }}>
+          <span>🔒</span>
+          <span>Der Privatmodus ist an. Schalte ihn in den Einstellungen aus, wenn du im Netz suchen willst.</span>
+        </div>
+      ) : (
+        <>
+          <div className="row" style={{ marginTop: 8, gap: 8 }}>
+            <input
+              className="input"
+              id="pic-search"
+              value={term}
+              placeholder="z. B. Fitnessstudio Hanteln"
+              maxLength={80}
+              onChange={(e) => setTerm(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void run();
+              }}
+            />
+            <button className="btn" disabled={running || busy || !term.trim()} onClick={() => void run()}>
+              {running ? '...' : 'Suchen'}
+            </button>
+          </div>
+          <div className="hint">
+            Die KI uebersetzt deine Eingabe in Suchbegriffe. Gesucht wird bei Openverse und Wikimedia Commons - der
+            Suchbegriff geht dorthin, das gewaehlte Bild landet danach nur auf deinem Geraet.
+          </div>
+        </>
+      )}
+
+      {error && (
+        <div className="tip warn" style={{ marginTop: 8 }}>
+          <span>⚠️</span>
+          <span>{error}</span>
+        </div>
+      )}
+
+      {hits && hits.length > 0 && (
+        <>
+          <div className="hint">Gesucht nach „{used}" - tippe ein Bild an.</div>
+          <div className="picture-grid">
+            {hits.map((hit) => (
+              <button
+                key={hit.thumb}
+                className="picture-hit"
+                disabled={busy}
+                title={hit.by ? `${hit.title} - ${hit.by}` : hit.title}
+                onClick={() => onPick(hit)}
+              >
+                <img src={hit.thumb} alt={hit.title} loading="lazy" referrerPolicy="no-referrer" />
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
