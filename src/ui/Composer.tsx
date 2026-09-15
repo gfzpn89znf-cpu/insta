@@ -1,10 +1,10 @@
 import { useMemo, useRef, useState } from 'react';
 import { NICHES, NICHE_IDS, STYLE_LABELS } from '../sim/niches';
-import { importPhoto } from '../sim/photos';
+import { importPhoto, importVideo } from '../sim/photos';
 import { createUserPost } from '../sim/posts';
 import { scoreDraft, type Draft } from '../sim/scoring';
 import { dispatch } from '../sim/store';
-import type { NicheId, StyleId, World } from '../sim/types';
+import type { NicheId, PostFormat, StyleId, World } from '../sim/types';
 import { usePhotoUrl } from './Media';
 import { Meter, PostMedia, ScoreRow, formatShort } from './common';
 
@@ -29,10 +29,15 @@ export default function Composer({
   const [collabId, setCollabId] = useState('');
   const [seed, setSeed] = useState(() => Math.floor(Math.random() * 1e9));
   const [photoId, setPhotoId] = useState<string | undefined>();
+  const [videoId, setVideoId] = useState<string | undefined>();
+  const [format, setFormat] = useState<PostFormat>('photo');
   const [loadingPhoto, setLoadingPhoto] = useState(false);
+  const [mediaError, setMediaError] = useState('');
   const galleryRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLInputElement>(null);
   const photo = usePhotoUrl(photoId);
+  const video = usePhotoUrl(videoId);
 
   const draft: Draft = {
     niche,
@@ -43,10 +48,12 @@ export default function Composer({
     collabId: collabId || undefined,
     imageSeed: seed,
     photoId,
+    format,
+    videoId,
   };
   const score = useMemo(
     () => scoreDraft(world, user, draft),
-    [world.time, niche, topicId, style, caption, tags.join(','), collabId, photoId],
+    [world.time, niche, topicId, style, caption, tags.join(','), collabId, photoId, videoId, format],
   );
 
   const trendTags = world.trends.map((t) => t.tag);
@@ -74,9 +81,25 @@ export default function Composer({
   const pickPhoto = async (file: File | undefined) => {
     if (!file) return;
     setLoadingPhoto(true);
+    setMediaError('');
     const id = await importPhoto(file);
     setLoadingPhoto(false);
     if (id) setPhotoId(id);
+    else setMediaError('Das Foto konnte nicht gelesen werden.');
+  };
+
+  const pickVideo = async (file: File | undefined) => {
+    if (!file) return;
+    setLoadingPhoto(true);
+    setMediaError('');
+    const result = await importVideo(file);
+    setLoadingPhoto(false);
+    if ('id' in result) {
+      setVideoId(result.id);
+      setFormat('reel');
+    } else {
+      setMediaError(result.error);
+    }
   };
 
   const publish = () => {
@@ -99,8 +122,19 @@ export default function Composer({
 
       <div className="composer-grid">
         <div>
-          <div className="preview-media">
-            {photoId ? (
+          <div className="chips" style={{ marginBottom: 10 }}>
+            <button className={`chip${format === 'photo' ? ' on' : ''}`} onClick={() => setFormat('photo')}>
+              🖼 Beitrag
+            </button>
+            <button className={`chip${format === 'reel' ? ' on' : ''}`} onClick={() => setFormat('reel')}>
+              ▶ Reel
+            </button>
+          </div>
+
+          <div className={`preview-media${format === 'reel' ? ' tall' : ''}`}>
+            {videoId && video ? (
+              <video className="media-img" src={video} muted loop autoPlay playsInline />
+            ) : photoId ? (
               photo ? (
                 <img className="media-img" src={photo} alt="Dein Foto" />
               ) : (
@@ -123,7 +157,12 @@ export default function Composer({
             <button className="btn secondary sm" disabled={loadingPhoto} onClick={() => cameraRef.current?.click()}>
               📷 Kamera
             </button>
-            {photoId ? (
+            <button className="btn secondary sm" disabled={loadingPhoto} onClick={() => videoRef.current?.click()}>
+              🎬 Video
+            </button>
+            {videoId ? (
+              <button className="btn ghost sm" onClick={() => setVideoId(undefined)}>Video entfernen</button>
+            ) : photoId ? (
               <button className="btn ghost sm" onClick={() => setPhotoId(undefined)}>Foto entfernen</button>
             ) : (
               <button className="btn ghost sm" onClick={() => setSeed(Math.floor(Math.random() * 1e9))}>
@@ -152,6 +191,22 @@ export default function Composer({
               e.target.value = '';
             }}
           />
+          <input
+            ref={videoRef}
+            type="file"
+            accept="video/*"
+            hidden
+            onChange={(e) => {
+              void pickVideo(e.target.files?.[0]);
+              e.target.value = '';
+            }}
+          />
+          {mediaError && <div className="tip warn"><span>⚠️</span><span>{mediaError}</span></div>}
+          {format === 'reel' && !videoId && (
+            <div className="hint">
+              Ohne eigenes Video wird dein Motiv als bewegter Clip gezeigt. Mit „🎬 Video" laedst du eine echte Aufnahme hoch.
+            </div>
+          )}
 
           <span className="label">Nische</span>
           <div className="chips">
@@ -304,6 +359,7 @@ const emptyPreview = {
   caption: '',
   hashtags: [],
   photoSource: 'generated' as const,
+  format: 'photo' as const,
   quality: 0.5,
   algoScore: 1,
   metrics: {

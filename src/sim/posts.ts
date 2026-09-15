@@ -2,7 +2,7 @@ import { generateCaption, generateHashtags } from './content';
 import { NICHES, getTopic, styleFit } from './niches';
 import { chance, clamp, gauss, pick, rngFrom, randInt, type Rng } from './rng';
 import { followerCount, scoreDraft, type Draft } from './scoring';
-import type { Account, NicheId, Post, StyleId, World } from './types';
+import type { Account, NicheId, Post, PostFormat, StyleId, World } from './types';
 
 export function nextId(world: World, prefix: string): string {
   world.counter += 1;
@@ -34,6 +34,19 @@ export function createAiPost(world: World, account: Account): Post {
   const topic = chooseTopic(rng, account, niche);
   const style = pick(rng, NICHES[niche].styles) as StyleId;
 
+  // In manchen Nischen ist Video die Regel, in anderen die Ausnahme.
+  const reelAffinity: Partial<Record<NicheId, number>> = {
+    dance: 0.75,
+    comedy: 0.65,
+    gaming: 0.55,
+    music: 0.5,
+    fitness: 0.45,
+    pets: 0.4,
+    food: 0.35,
+    beauty: 0.35,
+  };
+  const format: PostFormat = chance(rng, reelAffinity[niche] ?? 0.22) ? 'reel' : 'photo';
+
   const inspiration = gauss(rng, 0, 0.14);
   const quality = clamp(
     account.traits.charisma * 0.52 +
@@ -56,6 +69,7 @@ export function createAiPost(world: World, account: Account): Post {
     hashtags: generateHashtags(rng, niche, world.trends, account.traits.trendChasing),
     imageSeed: randInt(rng, 1, 2 ** 30),
     photoSource: world.settings.stockPhotos ? 'stock' : 'generated',
+    format,
     quality,
     algoScore: initialAlgoScore(account, quality),
     metrics: emptyMetrics(),
@@ -92,6 +106,8 @@ export function createUserPost(world: World, draft: Draft): Post {
     imageSeed: draft.imageSeed ?? randInt(rng, 1, 2 ** 30),
     photoSource: draft.photoId ? 'upload' : 'generated',
     photoId: draft.photoId,
+    format: draft.format ?? 'photo',
+    videoId: draft.videoId,
     // Etwas Glueck bleibt immer im Spiel - aber Qualitaet dominiert.
     quality: clamp(breakdown.total * 0.92 + gauss(rng, 0.04, 0.05), 0.03, 0.995),
     algoScore: initialAlgoScore(account, breakdown.total),

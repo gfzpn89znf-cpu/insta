@@ -1,7 +1,8 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { activeStories, buildFeed, suggestions } from '../sim/feed';
 import { toggleFollow } from '../sim/actions';
-import { dispatch } from '../sim/store';
+import { ensureCaptions } from '../sim/aiContent';
+import { dispatch, touch } from '../sim/store';
 import type { Account, World } from '../sim/types';
 import PostCard from './PostCard';
 import { AccountAvatar, StoryAvatar, Verified, followersOf, formatShort } from './common';
@@ -21,6 +22,11 @@ export default function Feed({ world, onProfile, onOpen, onTag, onStories, onCom
   const posts = useMemo(() => buildFeed(world, { limit: 30 }), [world.time, user.following.length]);
   const stories = useMemo(() => activeStories(world), [world.time]);
   const people = useMemo(() => suggestions(world, 5), [world.time, user.following.length]);
+
+  // Sichtbare Beitraege von der echten KI texten lassen, falls eingerichtet.
+  useEffect(() => {
+    ensureCaptions(world, posts.slice(0, 8), touch);
+  }, [posts.map((p) => p.id).join(',')]);
 
   return (
     <div>

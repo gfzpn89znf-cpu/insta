@@ -1,4 +1,5 @@
 import { addLog, follow, pushNotification, unfollow } from './engine';
+import { replyToUserComment } from './aiContent';
 import { chance, clamp, randInt, rngFrom } from './rng';
 import { followerCount } from './scoring';
 import type { World } from './types';
@@ -86,6 +87,28 @@ export function addUserComment(world: World, postId: string, text: string) {
   if (chance(rng, p) && !author.following.includes(user.id)) {
     follow(author, user);
     pushNotification(world, { kind: 'follow', actorId: author.id, text: 'folgt dir jetzt.' });
+  }
+
+  // Und antwortet manchmal auf den Kommentar - mit echter KI, wenn vorhanden.
+  if (chance(rng, clamp(0.25 + author.traits.sociability * 0.5, 0, 0.8))) {
+    void replyToUserComment(world, post, text).then((answer) => {
+      if (!answer) return;
+      post.commentList.push({
+        id: `c${world.counter++}`,
+        authorId: author.id,
+        text: answer.slice(0, 200),
+        at: world.time,
+        likes: 0,
+        ai: true,
+      });
+      post.metrics.comments += 1;
+      pushNotification(world, {
+        kind: 'comment',
+        actorId: author.id,
+        postId: post.id,
+        text: `hat dir geantwortet: "${answer.slice(0, 40)}"`,
+      });
+    });
   }
 }
 

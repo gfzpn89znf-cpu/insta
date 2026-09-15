@@ -87,6 +87,46 @@ export function buildExplore(world: World, limit = 36, nicheFilter?: string): Po
   return out;
 }
 
+/**
+ * Reels-Bereich: senkrechte Folge von Videos. Frische und Resonanz zaehlen,
+ * eigene Interessen ebenfalls - aber bewusst gemischt, damit man Neues sieht.
+ */
+export function buildReels(world: World, limit = 30): Post[] {
+  const user = world.accounts[world.user.accountId];
+  const following = new Set(user.following);
+  const scored: { post: Post; score: number }[] = [];
+
+  for (const id of world.order) {
+    const post = world.posts[id];
+    if (!post || post.format !== 'reel') continue;
+    const age = world.time - post.createdAt;
+    if (age > 10 * 24 * 60) break;
+    const affinity = user.audience[post.niche] ?? 0.05;
+    const heat = clamp(Math.log10(post.metrics.impressions + 10) / 6.5, 0, 1);
+    const er = post.metrics.likes / Math.max(1, post.metrics.impressions);
+    const known = following.has(post.authorId) ? 0.35 : 0;
+    const mine = post.authorId === user.id ? 0.5 : 0;
+    scored.push({
+      post,
+      score: heat * 0.45 + er * 3 + affinity * 0.5 + known + mine + Math.exp(-age / (48 * 60)) * 0.5,
+    });
+  }
+
+  scored.sort((a, b) => b.score - a.score);
+
+  // Nicht zweimal dieselbe Person hintereinander.
+  const out: Post[] = [];
+  const perAuthor = new Map<string, number>();
+  for (const entry of scored) {
+    if (out.length >= limit) break;
+    const count = perAuthor.get(entry.post.authorId) ?? 0;
+    if (count >= 2) continue;
+    perAuthor.set(entry.post.authorId, count + 1);
+    out.push(entry.post);
+  }
+  return out;
+}
+
 /** Accounts mit den meisten Followern - die Rangliste der Szene. */
 export function leaderboard(world: World, limit = 25): Account[] {
   return Object.values(world.accounts)

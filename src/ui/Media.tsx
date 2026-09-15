@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { drawAvatar, drawPostImage } from '../sim/image';
-import { photoUrl, stockPhotoUrls } from '../sim/photos';
+import { guessFemale } from '../sim/names';
+import { photoUrl, portraitUrl, stockPhotoUrls } from '../sim/photos';
 import type { Account, AvatarSpec, NicheId, Post, StyleId } from '../sim/types';
 
 /** Adresse eines gespeicherten Fotos laden. */
@@ -91,7 +92,7 @@ export function PostMedia({
   const uploaded = usePhotoUrl(post.photoSource === 'upload' ? post.photoId : undefined);
   const [sourceIndex, setSourceIndex] = useState(0);
   const useStock = post.photoSource === 'stock' && stockEnabled;
-  const candidates = useStock ? stockPhotoUrls(post.imageSeed, post.niche, size) : [];
+  const candidates = useStock ? stockPhotoUrls(post.imageSeed, post.niche, size, post.topic) : [];
 
   useEffect(() => {
     setSourceIndex(0);
@@ -120,12 +121,57 @@ export function PostMedia({
   return <GeneratedImage seed={post.imageSeed} niche={post.niche} style={post.style} size={size} eager={eager} />;
 }
 
-/** Profilbild: echtes Foto, sonst der gezeichnete Avatar. */
+/**
+ * Steuert, ob Fotos aus dem Netz geladen werden duerfen. Wird aus den
+ * Einstellungen gesetzt, damit nicht jede Avatar-Stelle die Welt kennen muss.
+ */
+let stockAllowed = true;
+
+export function setStockPhotosAllowed(value: boolean) {
+  stockAllowed = value;
+}
+
+/** Profilbild: eigenes Foto, echtes Portrait oder gezeichneter Avatar. */
 export function AccountAvatar({ account, size = 40 }: { account: Account; size?: number }) {
-  const url = usePhotoUrl(account.photoId);
-  if (url) {
-    return <img className="avatar" src={url} alt="" width={size} height={size} style={{ width: size, height: size, objectFit: 'cover' }} />;
+  const uploaded = usePhotoUrl(account.photoId);
+  const [portraitFailed, setPortraitFailed] = useState(false);
+
+  useEffect(() => {
+    setPortraitFailed(false);
+  }, [account.id]);
+
+  if (uploaded) {
+    return (
+      <img
+        className="avatar"
+        src={uploaded}
+        alt=""
+        width={size}
+        height={size}
+        style={{ width: size, height: size, objectFit: 'cover' }}
+      />
+    );
   }
+
+  // KI-Accounts bekommen ein echtes Gesicht - der Nutzer behaelt seinen Avatar,
+  // solange er kein eigenes Foto gesetzt hat.
+  if (!account.isUser && stockAllowed && !portraitFailed) {
+    return (
+      <img
+        className="avatar"
+        src={portraitUrl(account.id, guessFemale(account.name), size)}
+        alt=""
+        width={size}
+        height={size}
+        loading="lazy"
+        decoding="async"
+        referrerPolicy="no-referrer"
+        style={{ width: size, height: size, objectFit: 'cover' }}
+        onError={() => setPortraitFailed(true)}
+      />
+    );
+  }
+
   return <Avatar spec={account.avatar} size={size} />;
 }
 
@@ -136,6 +182,60 @@ export function Avatar({ spec, size = 40 }: { spec: AvatarSpec; size?: number })
   }, [spec.seed, spec.hue, spec.hue2, spec.shape, spec.initials]);
   const px = Math.round(size * (typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, 2) : 1));
   return <canvas ref={ref} className="avatar" width={px} height={px} style={{ width: size, height: size }} />;
+}
+
+/**
+ * Medium eines Reels: entweder ein echtes Video oder ein Foto mit langsamer
+ * Kamerafahrt. Fuer Fotos gibt es keine Video-Quelle im Netz, die ohne
+ * Zugangsschluessel zum Thema passt - die Bewegung erzeugt die App deshalb
+ * selbst, statt ein unpassendes Video zu zeigen.
+ */
+export function ReelMedia({
+  post,
+  active,
+  muted,
+  stockEnabled = true,
+}: {
+  post: Post;
+  active: boolean;
+  muted: boolean;
+  stockEnabled?: boolean;
+}) {
+  const videoUrl = usePhotoUrl(post.videoId);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el) return;
+    if (active) {
+      // Autoplay klappt auf dem Handy nur stumm - der Ton wird zugeschaltet.
+      void el.play().catch(() => undefined);
+    } else {
+      el.pause();
+      el.currentTime = 0;
+    }
+  }, [active, videoUrl]);
+
+  if (post.videoId) {
+    if (!videoUrl) return <div className="media-placeholder" />;
+    return (
+      <video
+        ref={videoRef}
+        className="reel-media"
+        src={videoUrl}
+        muted={muted}
+        loop
+        playsInline
+        preload="metadata"
+      />
+    );
+  }
+
+  return (
+    <div className={`reel-media ken-burns${active ? ' running' : ''}`}>
+      <PostMedia post={post} size={720} eager={active} stockEnabled={stockEnabled} />
+    </div>
+  );
 }
 
 /** Bild einer Story - gleiche Logik wie beim Beitrag. */

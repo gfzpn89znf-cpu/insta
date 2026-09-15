@@ -179,8 +179,11 @@ export function advancePost(world: World, post: Post, dt: number, sample = true,
   const audienceCap = world.settings.population * niche.reach * (0.015 + post.quality * topic.broad * 0.35);
   const saturation = clamp(1 - post.metrics.reachExplore / Math.max(1, audienceCap), 0, 1);
   const decay = Math.exp(-ageNow / EXPLORE_TAU);
+  // Video wird von jeder Plattform bevorzugt ausgespielt.
+  const formatBoost = post.format === 'reel' ? 1.22 : 1;
   const R = clamp(
     SPREAD_R0 *
+      formatBoost *
       Math.pow(Math.max(erRatio, 0.05), 1.45) *
       (1 + heat * 0.55) *
       (0.75 + author.traits.luck * 0.5) *

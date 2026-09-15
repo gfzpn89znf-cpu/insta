@@ -101,6 +101,24 @@ export function makeBio(rng: Rng, niche: NicheId, secondary: NicheId): string {
   return base;
 }
 
+const FEMALE_NAMES = new Set([
+  'lena', 'mia', 'emma', 'hannah', 'sofia', 'marie', 'lina', 'clara', 'amelie', 'nora',
+  'jana', 'laura', 'julia', 'sarah', 'anna', 'pia', 'greta', 'ida', 'frieda', 'merle',
+  'yara', 'aylin', 'zoe', 'nele', 'charlotte', 'ella', 'romy', 'jule', 'melina', 'alina',
+  'mara', 'selin', 'leonie', 'nina', 'svenja',
+]);
+
+/**
+ * Schaetzt aus dem Vornamen, ob ein Portraitfoto weiblich oder maennlich
+ * gewaehlt wird. Nur fuer die Bildauswahl - sonst spielt es keine Rolle.
+ */
+export function guessFemale(name: string): boolean {
+  const first = name.trim().split(/\s+/)[0]?.toLowerCase() ?? '';
+  if (FEMALE_NAMES.has(first)) return true;
+  // Unbekannte Namen: stabil verteilen statt raten.
+  return first.endsWith('a') || first.endsWith('e');
+}
+
 export function initialsOf(name: string): string {
   const parts = name.trim().split(/\s+/);
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();

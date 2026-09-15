@@ -17,10 +17,11 @@ import Onboarding from './ui/Onboarding';
 import People from './ui/People';
 import PostDetail from './ui/PostDetail';
 import Profile from './ui/Profile';
+import Reels from './ui/Reels';
 import Rail from './ui/Rail';
 import Settings from './ui/Settings';
 import StoryViewer from './ui/StoryViewer';
-import { AccountAvatar } from './ui/Media';
+import { AccountAvatar, setStockPhotosAllowed } from './ui/Media';
 import { isOverlay, useNavigation, type Navigation, type View } from './ui/nav';
 import { clockOf, followersOf, formatShort } from './ui/common';
 
@@ -98,6 +99,7 @@ function Shell({
   setToast: (value: string | null) => void;
 }) {
   const user = world.accounts[world.user.accountId];
+  setStockPhotosAllowed(world.settings.stockPhotos);
   const unreadNotifs = world.notifications.filter((n) => !n.read).length;
   const unreadDms = world.threadOrder.filter((id) => world.threads[id]?.unread).length;
 
@@ -114,6 +116,16 @@ function Shell({
     switch (view.kind) {
       case 'explore':
         return <Explore world={world} onProfile={openProfile} onOpen={openPost} onTag={openTag} />;
+      case 'reels':
+        return (
+          <Reels
+            world={world}
+            onProfile={openProfile}
+            onOpen={openPost}
+            onTag={openTag}
+            onCreate={() => nav.go({ kind: 'composer' })}
+          />
+        );
       case 'notifications':
         return <Notifications world={world} onProfile={openProfile} onOpen={openPost} />;
       case 'messages':
@@ -163,10 +175,21 @@ function Shell({
 
   const top = nav.top;
   const overlay = isOverlay(top);
+
+  // Escape schliesst jede Ueberlagerung - erwartet auf dem Rechner.
+  useEffect(() => {
+    if (!overlay) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') nav.back();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [overlay, nav]);
   const background = overlay ? (nav.below ?? { kind: 'feed' as const }) : top;
   // In Chat und Anruf stoert die Reiterleiste nur.
   const hideTabs = overlay || top.kind === 'chat';
-  const fullBleed = top.kind === 'chat' || top.kind === 'people' || top.kind === 'settings' || top.kind === 'editProfile';
+  const fullBleed =
+    top.kind === 'chat' || top.kind === 'people' || top.kind === 'settings' || top.kind === 'editProfile' || top.kind === 'reels';
 
   return (
     <div className="app">
@@ -174,6 +197,7 @@ function Shell({
         <div className="brand">Fotogram</div>
         <NavButton icon="⌂" label="Startseite" active={nav.tab === 'feed'} onClick={() => nav.goTab('feed')} />
         <NavButton icon="⌕" label="Entdecken" active={nav.tab === 'explore'} onClick={() => nav.goTab('explore')} />
+        <NavButton icon="▶" label="Reels" active={nav.tab === 'reels'} onClick={() => nav.goTab('reels')} />
         <NavButton icon="✉" label="Nachrichten" active={nav.tab === 'messages'} badge={unreadDms} onClick={() => nav.goTab('messages')} />
         <NavButton icon="♡" label="Aktivitaeten" active={nav.tab === 'notifications'} badge={unreadNotifs} onClick={() => nav.goTab('notifications')} />
         <NavButton icon="✎" label="Erstellen" active={false} onClick={() => nav.go({ kind: 'composer' })} />
@@ -193,6 +217,13 @@ function Shell({
             <div className="brand" style={{ padding: 0, fontSize: 22 }}>Fotogram</div>
             <div className="row">
               <span className="small faint">{formatShort(followersOf(user))} Follower</span>
+              <button
+                className="icon-btn badge-host"
+                onClick={() => nav.goTab('messages')}
+                aria-label="Nachrichten"
+              >
+                ✉{unreadDms > 0 && <span className="badge-dot tab">{unreadDms > 9 ? '9+' : unreadDms}</span>}
+              </button>
               <button className="icon-btn" onClick={() => nav.go({ kind: 'settings' })} aria-label="Einstellungen">⚙</button>
             </div>
           </header>
@@ -210,8 +241,8 @@ function Shell({
         <nav className="mobile-bar">
           <TabButton label="Startseite" active={nav.tab === 'feed'} onClick={() => nav.goTab('feed')} icon="⌂" />
           <TabButton label="Entdecken" active={nav.tab === 'explore'} onClick={() => nav.goTab('explore')} icon="⌕" />
+          <TabButton label="Reels" active={nav.tab === 'reels'} onClick={() => nav.goTab('reels')} icon="▶" />
           <TabButton label="Erstellen" active={false} onClick={() => nav.go({ kind: 'composer' })} icon="✎" />
-          <TabButton label="Nachrichten" active={nav.tab === 'messages'} badge={unreadDms} onClick={() => nav.goTab('messages')} icon="✉" />
           <TabButton label="Aktivitaeten" active={nav.tab === 'notifications'} badge={unreadNotifs} onClick={() => nav.goTab('notifications')} icon="♡" />
           <button
             className={top.kind === 'profile' && top.id === user.id ? 'active' : ''}

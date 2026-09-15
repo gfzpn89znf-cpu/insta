@@ -1,6 +1,6 @@
 import { NICHES, getTopic, styleFit } from './niches';
 import { clamp, smoothstep } from './rng';
-import type { Account, NicheId, QualityBreakdown, StyleId, World } from './types';
+import type { Account, NicheId, PostFormat, QualityBreakdown, StyleId, World } from './types';
 
 export interface Draft {
   niche: NicheId;
@@ -13,6 +13,10 @@ export interface Draft {
   imageSeed?: number;
   /** Eigenes Foto statt eines gezeichneten Motivs. */
   photoId?: string;
+  /** Bild oder Reel. */
+  format?: PostFormat;
+  /** Eigenes Video fuer ein Reel. */
+  videoId?: string;
 }
 
 const SPAM_TAGS = ['followme', 'follow4follow', 'f4f', 'likeforlike', 'l4l', 'followback', 'gainpost', 'spam'];

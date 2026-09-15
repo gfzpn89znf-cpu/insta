@@ -112,6 +112,8 @@ export interface Comment {
   likes: number;
   /** Antwort des Nutzers auf diesen Kommentar. */
   reply?: string;
+  /** Von der echten KI verfasst. */
+  ai?: boolean;
 }
 
 export interface PostMetrics {
@@ -133,6 +135,9 @@ export interface PostMetrics {
 /** Woher das Bild eines Beitrags kommt. */
 export type PhotoSource = 'generated' | 'upload' | 'stock';
 
+/** Beitragsform: stehendes Bild im Feed oder Video im Reels-Bereich. */
+export type PostFormat = 'photo' | 'reel';
+
 export interface Post {
   id: string;
   authorId: string;
@@ -147,6 +152,10 @@ export interface Post {
   photoSource: PhotoSource;
   /** Id des gespeicherten Fotos (bei eigenen Aufnahmen). */
   photoId?: string;
+  /** Bild oder Video. */
+  format: PostFormat;
+  /** Id des gespeicherten Videos (bei eigenen Aufnahmen). */
+  videoId?: string;
   /** Intrinsische Qualitaet 0..1 - das Herz der Reichweitenberechnung. */
   quality: number;
   /** Aktuelle Algorithmus-Bewertung 0..~2, entwickelt sich mit dem Engagement. */
@@ -175,6 +184,8 @@ export interface Post {
   breakdown?: QualityBreakdown;
   /** Verhindert, dass die Viral-Meldung mehrfach ausgeloest wird. */
   viralNotified?: boolean;
+  /** Bildunterschrift stammt von der echten KI. */
+  captionAi?: boolean;
 }
 
 export interface QualityBreakdown {
@@ -254,6 +265,8 @@ export interface DmThread {
   replyAtReal?: number;
   /** Text, der dann gesendet wird. */
   pendingReply?: string;
+  /** Bis wann auf die KI gewartet wird, bevor die Textbausteine einspringen. */
+  aiWaitUntil?: number;
 }
 
 export interface Trend {

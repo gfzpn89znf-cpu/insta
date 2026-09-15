@@ -67,6 +67,24 @@ async function loadBitmap(file: File): Promise<ImageBitmap | HTMLImageElement> {
   }
 }
 
+/** Groesste Datei, die als Reel gespeichert wird. */
+export const MAX_VIDEO_BYTES = 60 * 1024 * 1024;
+
+/**
+ * Legt ein eigenes Video ab. Videos werden nicht umgerechnet - dafuer fehlt
+ * dem Browser die Technik - sondern nur groessenmaessig begrenzt.
+ */
+export async function importVideo(file: File): Promise<{ id: string } | { error: string }> {
+  if (!file.type.startsWith('video/')) return { error: 'Das ist keine Videodatei.' };
+  if (file.size > MAX_VIDEO_BYTES) {
+    return { error: `Das Video ist ${(file.size / 1024 / 1024).toFixed(0)} MB gross. Bitte hoechstens ${MAX_VIDEO_BYTES / 1024 / 1024} MB.` };
+  }
+  const id = `vd${Date.now().toString(36)}${(counter++).toString(36)}`;
+  if (!(await dbPutPhoto(id, file))) return { error: 'Das Video konnte nicht gespeichert werden.' };
+  urlCache.set(id, URL.createObjectURL(file));
+  return { id };
+}
+
 const urlCache = new Map<string, string>();
 const pending = new Map<string, Promise<string | null>>();
 
@@ -96,7 +114,159 @@ export function forgetPhoto(id: string) {
   }
 }
 
-/** Suchbegriffe, damit die Fotos zum Thema des Beitrags passen. */
+/**
+ * Suchbegriffe je Motiv. Frueher wurde nur nach der Nische gesucht - dann
+ * stand unter "Mein Workout heute" schon mal ein Waldbild. Jetzt bestimmt das
+ * gewaehlte Motiv die Suche.
+ */
+const TOPIC_KEYWORDS: Record<string, string> = {
+  // Fitness
+  'fitness:transformation': 'fitness,muscle',
+  'fitness:workout': 'workout,gym',
+  'fitness:mealprep': 'mealprep,healthyfood',
+  'fitness:gymselfie': 'gym,fitness',
+  'fitness:pr': 'weightlifting,barbell',
+  'fitness:mistakes': 'gym,training',
+  'fitness:restday': 'stretching,yoga',
+  'fitness:homeworkout': 'homeworkout,pushup',
+  // Food
+  'food:rezept': 'recipe,cooking',
+  'food:streetfood': 'streetfood,foodtruck',
+  'food:backen': 'baking,cake',
+  'food:restaurant': 'restaurant,dinner',
+  'food:meal': 'lunch,plate',
+  'food:omas': 'homemade,stew',
+  'food:vegan': 'vegan,salad',
+  'food:kaffee': 'coffee,espresso',
+  // Reisen
+  'travel:geheimtipp': 'village,travel',
+  'travel:budget': 'backpacking,hostel',
+  'travel:sonnenaufgang': 'sunrise,viewpoint',
+  'travel:roadtrip': 'roadtrip,highway',
+  'travel:vanlife': 'vanlife,campervan',
+  'travel:packliste': 'backpack,luggage',
+  'travel:fail': 'airport,train',
+  'travel:hotel': 'hotel,room',
+  // Fashion
+  'fashion:outfit': 'outfit,fashion',
+  'fashion:thrift': 'thriftstore,vintageclothes',
+  'fashion:capsule': 'wardrobe,clothes',
+  'fashion:dupes': 'shopping,fashion',
+  'fashion:styling': 'style,model',
+  'fashion:runway': 'runway,fashionweek',
+  'fashion:diy': 'sewing,tailor',
+  'fashion:shoes': 'sneakers,shoes',
+  // Kunst
+  'art:prozess': 'painting,artist',
+  'art:skizze': 'sketchbook,drawing',
+  'art:fertig': 'artwork,painting',
+  'art:atelier': 'studio,artstudio',
+  'art:tutorial': 'paintbrush,palette',
+  'art:fail': 'canvas,paint',
+  'art:commission': 'portrait,drawing',
+  'art:material': 'paint,brushes',
+  // Fotografie
+  'photo:street': 'streetphotography,city',
+  'photo:portrait': 'portrait,photography',
+  'photo:edit': 'lightroom,editing',
+  'photo:gear': 'camera,lens',
+  'photo:analog': 'film,analog',
+  'photo:settings': 'camera,photographer',
+  'photo:bluehour': 'bluehour,dusk',
+  'photo:behind': 'photoshoot,studio',
+  // Tech
+  'tech:setup': 'desksetup,workspace',
+  'tech:review': 'gadget,technology',
+  'tech:tipps': 'laptop,keyboard',
+  'tech:ki': 'server,technology',
+  'tech:code': 'code,programming',
+  'tech:budget': 'electronics,gadget',
+  'tech:fail': 'cables,computer',
+  'tech:zukunft': 'robot,futuristic',
+  // Gaming
+  'gaming:clip': 'videogame,gaming',
+  'gaming:review': 'console,videogame',
+  'gaming:setup': 'gamingsetup,rgb',
+  'gaming:speedrun': 'arcade,gaming',
+  'gaming:indie': 'pixelart,videogame',
+  'gaming:rant': 'controller,gaming',
+  'gaming:nostalgie': 'retrogaming,arcade',
+  'gaming:tipps': 'gamer,controller',
+  // Musik
+  'music:studio': 'recordingstudio,mixer',
+  'music:live': 'concert,livemusic',
+  'music:cover': 'singer,microphone',
+  'music:beat': 'synthesizer,producer',
+  'music:release': 'vinyl,album',
+  'music:vinyl': 'vinyl,records',
+  'music:story': 'guitar,songwriter',
+  'music:jam': 'band,rehearsal',
+  // Tiere
+  'pets:alltag': 'dog,pet',
+  'pets:trick': 'dogtraining,dog',
+  'pets:welpe': 'puppy,kitten',
+  'pets:fail': 'dog,mess',
+  'pets:tierarzt': 'veterinarian,dog',
+  'pets:adoption': 'shelterdog,rescuedog',
+  'pets:schlaf': 'sleepingcat,sleepingdog',
+  'pets:tipps': 'dog,leash',
+  // Beauty
+  'beauty:routine': 'skincare,cosmetics',
+  'beauty:tutorial': 'makeup,beauty',
+  'beauty:drogerie': 'cosmetics,products',
+  'beauty:haare': 'hairstyle,hairdresser',
+  'beauty:nomakeup': 'portrait,face',
+  'beauty:fails': 'makeup,mirror',
+  'beauty:nails': 'nails,manicure',
+  'beauty:inci': 'serum,skincare',
+  // Lifestyle
+  'lifestyle:morgen': 'morning,breakfast',
+  'lifestyle:wohnung': 'interior,livingroom',
+  'lifestyle:produktiv': 'notebook,planner',
+  'lifestyle:minimal': 'minimalism,interior',
+  'lifestyle:mentalhealth': 'calm,window',
+  'lifestyle:geld': 'savings,coins',
+  'lifestyle:sonntag': 'candle,blanket',
+  'lifestyle:buch': 'book,reading',
+  // Autos
+  'cars:build': 'carrepair,garage',
+  'cars:youngtimer': 'classiccar,oldtimer',
+  'cars:detail': 'cardetail,wheel',
+  'cars:roadtrip': 'mountainroad,car',
+  'cars:werkstatt': 'garage,mechanic',
+  'cars:ev': 'electriccar,charging',
+  'cars:kosten': 'car,engine',
+  'cars:treffen': 'carmeet,cars',
+  // Natur
+  'nature:wandern': 'hiking,trail',
+  'nature:tiere': 'wildlife,deer',
+  'nature:jahreszeit': 'autumn,forest',
+  'nature:camping': 'camping,tent',
+  'nature:umwelt': 'nature,forest',
+  'nature:pflanzen': 'plants,flowers',
+  'nature:nebel': 'fog,forest',
+  'nature:route': 'mountains,hiking',
+  // Comedy
+  'comedy:alltag': 'friends,laughing',
+  'comedy:sketch': 'people,funny',
+  'comedy:meme': 'funny,people',
+  'comedy:eltern': 'family,children',
+  'comedy:buero': 'office,meeting',
+  'comedy:dialekt': 'people,talking',
+  'comedy:selbstironie': 'portrait,funny',
+  'comedy:reaction': 'laughing,person',
+  // Tanz
+  'dance:choreo': 'dancer,dancing',
+  'dance:tutorial': 'dance,studio',
+  'dance:freestyle': 'hiphopdance,dancer',
+  'dance:battle': 'breakdance,dancer',
+  'dance:probe': 'dancestudio,rehearsal',
+  'dance:duo': 'dancing,couple',
+  'dance:ballett': 'ballet,dancer',
+  'dance:fail': 'dancer,stage',
+};
+
+/** Rueckfall, wenn ein Motiv nicht in der Liste steht. */
 const KEYWORDS: Record<NicheId, string> = {
   fitness: 'gym,fitness,workout',
   food: 'food,meal,cooking',
@@ -118,14 +288,34 @@ const KEYWORDS: Record<NicheId, string> = {
 
 /**
  * Mehrere Quellen fuer ein Foto, in der Reihenfolge, in der sie versucht
- * werden. Schlaegt alles fehl, zeichnet die App das Bild selbst.
+ * werden: erst genau zum Motiv, dann zur Nische, dann irgendein Foto - und
+ * wenn alles scheitert, zeichnet die App das Bild selbst.
  */
-export function stockPhotoUrls(seed: number, niche: NicheId, size = 600): string[] {
+export function stockPhotoUrls(seed: number, niche: NicheId, size = 600, topicId?: string): string[] {
   const lock = Math.abs(seed) % 100000;
-  return [
-    `https://loremflickr.com/${size}/${size}/${encodeURIComponent(KEYWORDS[niche])}?lock=${lock}`,
-    `https://picsum.photos/seed/fg${lock}/${size}/${size}`,
-  ];
+  const urls: string[] = [];
+  const topicTags = topicId ? TOPIC_KEYWORDS[`${niche}:${topicId}`] : undefined;
+  if (topicTags) {
+    // "/all" verlangt, dass alle Begriffe zutreffen - das trifft das Motiv.
+    urls.push(`https://loremflickr.com/${size}/${size}/${encodeURIComponent(topicTags)}/all?lock=${lock}`);
+    urls.push(`https://loremflickr.com/${size}/${size}/${encodeURIComponent(topicTags.split(',')[0])}?lock=${lock}`);
+  }
+  urls.push(`https://loremflickr.com/${size}/${size}/${encodeURIComponent(KEYWORDS[niche])}?lock=${lock}`);
+  urls.push(`https://picsum.photos/seed/fg${lock}/${size}/${size}`);
+  return urls;
+}
+
+/**
+ * Profilbild eines KI-Accounts: ein echtes Portraitfoto statt des
+ * gezeichneten Monogramms.
+ */
+export function portraitUrl(accountId: string, female: boolean, size = 128): string {
+  let hash = 0;
+  for (let i = 0; i < accountId.length; i++) hash = (hash * 31 + accountId.charCodeAt(i)) >>> 0;
+  const index = hash % 100;
+  const folder = female ? 'women' : 'men';
+  const variant = size <= 128 ? 'med' : 'large';
+  return `https://randomuser.me/api/portraits/${variant}/${folder}/${index}.jpg`;
 }
 
 /**
@@ -137,6 +327,7 @@ export async function pruneOrphanPhotos(world: World): Promise<number> {
   for (const id of world.order) {
     const p = world.posts[id];
     if (p?.photoId) used.add(p.photoId);
+    if (p?.videoId) used.add(p.videoId);
   }
   for (const acc of Object.values(world.accounts)) {
     if (acc.photoId) used.add(acc.photoId);

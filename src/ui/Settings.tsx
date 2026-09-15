@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { updateProfile } from '../sim/actions';
+import { AI_MODELS, getAiSettings, getUsage, onAiChange, setAiSettings, testAiKey } from '../sim/ai';
 import { storageEstimate } from '../sim/db';
 import { importPhoto, pruneOrphanPhotos } from '../sim/photos';
 import { dispatch, resetWorld, saveNow, setSpeed } from '../sim/store';
@@ -181,6 +182,9 @@ export default function Settings({
               Speicher aufraeumen
             </button>
 
+            <div className="section-title">Kuenstliche Intelligenz</div>
+            <AiSection onToast={onToast} />
+
             <div className="section-title">App</div>
             <InstallButton onToast={onToast} />
             <button
@@ -220,6 +224,128 @@ export default function Settings({
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Schaltet die echte KI frei. Der Schluessel bleibt auf dem Geraet und geht
+ * nur an Anthropic - Fotogram hat keinen Server, der ihn sehen koennte.
+ */
+function AiSection({ onToast }: { onToast: (msg: string) => void }) {
+  const [settings, setSettings] = useState(getAiSettings);
+  const [usage, setUsage] = useState(getUsage);
+  const [key, setKey] = useState(settings.apiKey);
+  const [testing, setTesting] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  useEffect(() =>
+    onAiChange(() => {
+      setSettings(getAiSettings());
+      setUsage(getUsage());
+    }),
+  []);
+
+  const save = (patch: Parameters<typeof setAiSettings>[0]) => {
+    setAiSettings(patch);
+    setSettings(getAiSettings());
+  };
+
+  const check = async () => {
+    setTesting(true);
+    setResult(null);
+    const outcome = await testAiKey(key, settings.model);
+    setTesting(false);
+    setResult(outcome);
+    if (outcome.ok) {
+      save({ apiKey: key });
+      onToast('Echte KI ist aktiv.');
+    }
+  };
+
+  const active = settings.apiKey.length > 20;
+
+  return (
+    <div className="card" style={{ padding: 14 }}>
+      <div className="row" style={{ marginBottom: 8 }}>
+        <b>{active ? '✅ Echte KI aktiv' : 'Noch nicht eingerichtet'}</b>
+      </div>
+      <p className="small muted" style={{ marginTop: 0 }}>
+        Ohne Schluessel schreiben die Accounts aus vorbereiteten Bausteinen. Mit einem eigenen Schluessel von Anthropic
+        denken sich Claude-Modelle jede Nachricht, jeden Kommentar und jede Bildunterschrift selbst aus - und gehen am
+        Telefon auf das ein, was du sagst.
+      </p>
+      <p className="small faint">
+        Schluessel bekommst du unter console.anthropic.com. Er wird nur auf diesem Geraet gespeichert und ausschliesslich
+        an Anthropic geschickt. Es entstehen Kosten nach Verbrauch - meist Bruchteile eines Cents pro Nachricht.
+      </p>
+
+      <span className="label">API-Schluessel</span>
+      <input
+        className="input"
+        id="ai-key"
+        type="password"
+        autoComplete="off"
+        spellCheck={false}
+        value={key}
+        placeholder="sk-ant-..."
+        onChange={(e) => setKey(e.target.value)}
+      />
+
+      <span className="label">Modell</span>
+      <select className="select" id="ai-model" value={settings.model} onChange={(e) => save({ model: e.target.value })}>
+        {AI_MODELS.map((m) => (
+          <option key={m.id} value={m.id}>
+            {m.label} - {m.hint}
+          </option>
+        ))}
+      </select>
+
+      <span className="label">Hoechstens Anfragen pro Tag</span>
+      <input
+        className="input"
+        id="ai-budget"
+        type="number"
+        min={10}
+        max={5000}
+        value={settings.dailyBudget}
+        onChange={(e) => save({ dailyBudget: Math.max(10, Number(e.target.value) || 10) })}
+      />
+      <div className="hint">Schutz vor unerwarteten Kosten. Ist das Budget aufgebraucht, uebernehmen die Bausteine.</div>
+
+      <div className="row" style={{ marginTop: 12 }}>
+        <button className="btn" disabled={testing || key.trim().length < 20} onClick={() => void check()}>
+          {testing ? 'Wird geprueft...' : 'Verbinden und testen'}
+        </button>
+        {active && (
+          <button
+            className="btn secondary sm"
+            onClick={() => {
+              save({ apiKey: '' });
+              setKey('');
+              setResult(null);
+              onToast('KI-Schluessel entfernt.');
+            }}
+          >
+            Entfernen
+          </button>
+        )}
+      </div>
+
+      {result && (
+        <div className={`tip${result.ok ? '' : ' warn'}`} style={{ marginTop: 10 }}>
+          <span>{result.ok ? '✅' : '⚠️'}</span>
+          <span>{result.message}</span>
+        </div>
+      )}
+
+      {active && (
+        <div className="hint" style={{ marginTop: 10 }}>
+          Heute: {usage.requests} Anfragen · {formatShort(usage.inputTokens + usage.outputTokens)} Tokens
+          {usage.errors > 0 ? ` · ${usage.errors} Fehler` : ''}
+          {usage.lastError ? ` · zuletzt: ${usage.lastError}` : ''}
+        </div>
+      )}
     </div>
   );
 }

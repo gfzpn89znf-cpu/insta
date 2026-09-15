@@ -9,6 +9,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 export type View =
   | { kind: 'feed' }
   | { kind: 'explore' }
+  | { kind: 'reels' }
   | { kind: 'notifications' }
   | { kind: 'messages' }
   | { kind: 'insights' }
@@ -23,9 +24,9 @@ export type View =
   | { kind: 'settings' }
   | { kind: 'editProfile' };
 
-export type TabKind = 'feed' | 'explore' | 'notifications' | 'messages' | 'insights';
+export type TabKind = 'feed' | 'explore' | 'reels' | 'notifications' | 'messages' | 'insights';
 
-const TABS: TabKind[] = ['feed', 'explore', 'notifications', 'messages', 'insights'];
+const TABS: TabKind[] = ['feed', 'explore', 'reels', 'notifications', 'messages', 'insights'];
 
 /** Ansichten, die ueber dem bisherigen Bildschirm liegen statt ihn zu ersetzen. */
 const OVERLAYS = new Set(['post', 'composer', 'stories', 'call']);

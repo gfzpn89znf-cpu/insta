@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { addUserComment, replyToComment, toggleLike, toggleSave } from '../sim/actions';
 import { NICHES } from '../sim/niches';
 import { topicLabel } from '../sim/posts';
-import { dispatch } from '../sim/store';
+import { ensureComments } from '../sim/aiContent';
+import { dispatch, touch } from '../sim/store';
 import type { Post, World } from '../sim/types';
 import { AccountAvatar, PostMedia } from './Media';
 import { CaptionText, ScoreRow, Verified, engagementRate, formatFull, formatShort, relTime } from './common';
@@ -26,13 +27,10 @@ export default function PostDetail({
   const liked = world.user.likedPosts.includes(post.id);
   const saved = world.user.savedPosts.includes(post.id);
 
+  // Kommentare von der echten KI schreiben lassen, falls eingerichtet.
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+    ensureComments(world, post, touch);
+  }, [post.id, post.commentList.length]);
 
   if (!author) return null;
 

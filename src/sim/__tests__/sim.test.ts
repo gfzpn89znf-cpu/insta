@@ -6,6 +6,10 @@ import { scoreCaption, scoreDraft, scoreHashtags, followerCount, type Draft } fr
 import { addUserComment, toggleFollow, toggleLike, toggleSave } from '../actions';
 import { buildExplore, buildFeed, leaderboard, searchAccounts, searchHashtag } from '../feed';
 import { applyDmOption } from '../dms';
+import { openChat, processChatReplies, sendMessage } from '../chat';
+import { buildReels } from '../feed';
+import { portraitUrl, stockPhotoUrls } from '../photos';
+import { ask, aiReady } from '../ai';
 import { makeRng, powerLaw } from '../rng';
 import { rebuildIndex } from '../world';
 import type { World } from '../types';
@@ -327,6 +331,121 @@ describe('Nachrichten und Kooperationen', () => {
     expect(w.user.money).toBe(500);
     expect(w.user.deals).toHaveLength(1);
     expect(w.threads.t1.messages.length).toBeGreaterThan(1);
+  });
+});
+
+describe('Fotos passend zum Thema', () => {
+  it('sucht nach dem Motiv, nicht nur nach der Nische', () => {
+    const urls = stockPhotoUrls(42, 'fitness', 600, 'workout');
+    expect(urls[0]).toContain('workout');
+    // "/all" verlangt, dass alle Begriffe zutreffen.
+    expect(urls[0]).toContain('/all');
+  });
+
+  it('haelt fuer jedes Motiv eigene Begriffe bereit', () => {
+    const gym = stockPhotoUrls(1, 'fitness', 600, 'workout')[0];
+    const food = stockPhotoUrls(1, 'food', 600, 'rezept')[0];
+    expect(gym).not.toBe(food);
+    expect(food).toContain('recipe');
+  });
+
+  it('faellt auf die Nische zurueck, wenn das Motiv unbekannt ist', () => {
+    const urls = stockPhotoUrls(7, 'nature', 600, 'gibtesnicht');
+    expect(urls[0]).toContain('nature');
+    expect(urls.length).toBeGreaterThan(1);
+  });
+
+  it('gibt jedem Account ein festes Portrait', () => {
+    expect(portraitUrl('a12', true)).toBe(portraitUrl('a12', true));
+    expect(portraitUrl('a12', true)).not.toBe(portraitUrl('a13', true));
+    expect(portraitUrl('a12', true)).toContain('women');
+    expect(portraitUrl('a12', false)).toContain('men');
+  });
+});
+
+describe('Reels', () => {
+  it('enthaelt nur Videobeitraege', () => {
+    const w = smallWorld(71);
+    tick(w, 2 * 1440, { sample: false, notify: false });
+    const reels = buildReels(w, 20);
+    expect(reels.length).toBeGreaterThan(0);
+    expect(reels.every((p) => p.format === 'reel')).toBe(true);
+  });
+
+  it('zeigt nicht zweimal hintereinander dieselbe Person', () => {
+    const w = smallWorld(73);
+    tick(w, 3 * 1440, { sample: false, notify: false });
+    const reels = buildReels(w, 20);
+    const counts = new Map<string, number>();
+    for (const r of reels) counts.set(r.authorId, (counts.get(r.authorId) ?? 0) + 1);
+    expect(Math.max(...counts.values())).toBeLessThanOrEqual(2);
+  });
+
+  it('spielt Videos etwas breiter aus als Bilder', () => {
+    const w = smallWorld(79);
+    tick(w, 2 * 1440, { sample: false, notify: false });
+    const posts = w.order.map((id) => w.posts[id]).filter((p) => p.metrics.impressions > 200);
+    const reels = posts.filter((p) => p.format === 'reel');
+    const photos = posts.filter((p) => p.format === 'photo');
+    expect(reels.length).toBeGreaterThan(0);
+    expect(photos.length).toBeGreaterThan(0);
+  });
+});
+
+describe('Antworten ohne eingerichtete KI', () => {
+  it('meldet, dass keine echte KI eingerichtet ist', async () => {
+    expect(aiReady()).toBe(false);
+    expect(await ask({ system: 'x', messages: [{ role: 'user', content: 'hi' }] })).toBeNull();
+  });
+
+  it('beantwortet die Frage nach dem Namen mit dem Namen', async () => {
+    const w = smallWorld(83);
+    const partner = Object.values(w.accounts).find((a) => !a.isUser && a.traits.sociability > 0.4)!;
+    const threadId = openChat(w, partner.id);
+    sendMessage(w, threadId, 'Hallo, wie ist dein Name?');
+    // Die KI-Anfrage scheitert ohne Schluessel sofort, dann greifen die Bausteine.
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    const pending = w.threads[threadId].pendingReply;
+    expect(pending).toBeTruthy();
+    expect(pending!.toLowerCase()).toContain(partner.name.split(' ')[0].toLowerCase());
+  });
+
+  it('stellt die Antwort nach der Wartezeit zu', async () => {
+    const w = smallWorld(89);
+    // Kleine, gesellige Accounts antworten zuverlaessig - grosse oft gar nicht.
+    const partner = Object.values(w.accounts)
+      .filter((a) => !a.isUser && a.traits.sociability > 0.5)
+      .sort((a, b) => followerCount(a) - followerCount(b))[0];
+    const threadId = openChat(w, partner.id);
+    const thread = w.threads[threadId];
+
+    // Nicht jede Nachricht wird beantwortet - das ist Absicht. Fuer den Test
+    // schreiben wir so lange, bis eine Antwort eingeplant ist.
+    for (let attempt = 0; attempt < 8 && !thread.replyAtReal; attempt++) {
+      sendMessage(w, threadId, 'Hey, wie geht es dir?');
+      await new Promise((resolve) => setTimeout(resolve, 40));
+    }
+    expect(thread.pendingReply).toBeTruthy();
+    // Zustellzeit vorziehen, statt echte Sekunden zu warten.
+    thread.replyAtReal = Date.now() - 1;
+    expect(processChatReplies(w)).toBe(true);
+    const messages = thread.messages;
+    expect(messages[messages.length - 1].fromUser).toBe(false);
+  });
+
+  it('laesst ein Gespraech nicht haengen, wenn niemand antwortet', async () => {
+    const w = smallWorld(91);
+    const partner = Object.values(w.accounts).find((a) => !a.isUser)!;
+    const threadId = openChat(w, partner.id);
+    sendMessage(w, threadId, 'Hallo!');
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    const thread = w.threads[threadId];
+    // Antwort kuenstlich ausbleiben lassen und die Wartezeit ueberschreiten.
+    thread.pendingReply = undefined;
+    thread.replyAtReal = Date.now() - 1;
+    thread.aiWaitUntil = Date.now() - 1;
+    processChatReplies(w);
+    expect(thread.replyAtReal).toBeUndefined();
   });
 });
 

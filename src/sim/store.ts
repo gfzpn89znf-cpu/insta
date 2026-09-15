@@ -33,6 +33,11 @@ export function getVersion() {
   return version;
 }
 
+/** Oberflaeche neu zeichnen - etwa wenn eine KI-Antwort eingetroffen ist. */
+export function touch() {
+  emit();
+}
+
 export function getWorld(): World | null {
   return world;
 }

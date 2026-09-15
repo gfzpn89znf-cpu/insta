@@ -39,7 +39,8 @@ npm run build:single  # alles in eine eigenstaendige HTML-Datei buendeln
 | Bereich | Inhalt |
 | --- | --- |
 | **Feed** | Beiträge abonnierter Accounts, gemischt mit algorithmischen Empfehlungen, Stories, Likes, Kommentare, Speichern |
-| **Erstellen** | Eigene Fotos aus Galerie oder Kamera, sonst ein gezeichnetes Motiv; dazu Thema, Bildunterschrift, Hashtags, Kollaboration – mit Live-Analyse und konkreten Verbesserungstipps |
+| **Erstellen** | Eigene Fotos und Videos aus Galerie oder Kamera, sonst ein gezeichnetes Motiv; dazu Thema, Bildunterschrift, Hashtags, Kollaboration – mit Live-Analyse und konkreten Verbesserungstipps |
+| **Reels** | Senkrechter Videobereich zum Durchscrollen. Eigene Videos laufen als echtes Video, KI-Beiträge als bewegter Clip. Video wird vom Algorithmus spürbar breiter ausgespielt |
 | **Nachrichten** | Freie Unterhaltungen mit jedem Account. Die Antworten richten sich nach Persönlichkeit, Reichweite und eurer bisherigen Nähe – und kommen mit Verzögerung |
 | **Anrufe** | Sprach- und Videoanrufe mit Klingeln, Annehmen, Gesprächsdauer und gesprochenen Antworten. Nicht jeder geht ran: nachts, bei sehr großen Accounts oder wenig Nähe klingelt es vergeblich |
 | **Entdecken** | Explore-Raster, Suche nach Accounts und Hashtags, Trend-Hashtags, Rangliste der Szene |
@@ -114,18 +115,50 @@ Gemessen über die Kalibrierungsläufe in `src/sim/__tests__/sim.test.ts`:
 
 Ab 1.000 Followern melden sich Marken, ab 100.000 gibt es das blaue Häkchen.
 
-## Fotos
+## Echte KI (optional)
 
-Es gibt drei Bildquellen, und die App fällt automatisch auf die nächste zurück:
+Ohne Einrichtung schreiben die Accounts aus vorbereiteten Bausteinen – das
+funktioniert offline, kostet nichts und erkennt inzwischen auch direkte Fragen
+(„Wie heißt du?" bekommt den Namen zur Antwort).
 
-1. **Eigene Fotos** – aus der Galerie oder direkt aus der Kamera. Sie werden auf
-   maximal 1280 Pixel verkleinert, als JPEG gespeichert und liegen in IndexedDB,
-   überstehen also jeden Neustart. Auch das Profilbild lässt sich so setzen.
-2. **Echte Fotos für die KI-Accounts** – passend zur Nische von einem
-   öffentlichen Fotodienst. Abschaltbar unter *Einstellungen → Fotos*.
-3. **Gezeichnete Motive** – prozedural aus dem Seed des Beitrags erzeugt. Sie
-   greifen immer dann, wenn kein Internet da ist oder der Fotodienst nicht
-   antwortet, und sehen nach dem Neuladen exakt gleich aus.
+Mit einem eigenen API-Schlüssel von Anthropic (*Einstellungen → Künstliche
+Intelligenz*) übernimmt ein Claude-Modell:
+
+- **Unterhaltungen** – jede Antwort wird neu formuliert, passend zu Charakter,
+  Reichweite, Tageszeit und eurer bisherigen Nähe.
+- **Anrufe** – du sprichst (Spracherkennung des Browsers), die Person antwortet
+  und wird vorgelesen. Ohne Mikrofon gibt es ein Textfeld.
+- **Bildunterschriften** – jeder Account textet in seinem eigenen Ton.
+- **Kommentare** – unterschiedlich lang, mal begeistert, mal gleichgültig; und
+  Autoren antworten auf deine Kommentare.
+
+Der Schlüssel liegt ausschließlich im Browser des Geräts und geht nur an
+Anthropic – Fotogram hat keinen Server, der ihn sehen könnte. Ein Tagesbudget
+begrenzt die Anfragen; ist es aufgebraucht oder scheitert eine Anfrage,
+übernehmen sofort wieder die Bausteine. Anfragen entstehen nur für Inhalte, die
+du tatsächlich siehst.
+
+Das SDK wird als eigenes Bündel geladen und nur dann, wenn ein Schlüssel
+hinterlegt ist – ohne KI bleibt die App genauso schlank wie vorher.
+
+## Fotos und Videos
+
+Es gibt mehrere Quellen, und die App fällt automatisch auf die nächste zurück:
+
+1. **Eigene Aufnahmen** – Fotos aus Galerie oder Kamera werden auf maximal
+   1280 Pixel verkleinert und als JPEG gespeichert; Videos bis 60 MB landen
+   unverändert in IndexedDB. Auch das Profilbild lässt sich so setzen.
+2. **Echte Fotos für die KI-Accounts** – gesucht wird nach dem **Motiv**, nicht
+   nur nach der Nische: „Workout-Routine" liefert Gym-Bilder, „3-Zutaten-Rezept"
+   liefert Essen. Für alle 128 Motive gibt es eigene Suchbegriffe, und die Suche
+   verlangt, dass alle Begriffe zutreffen.
+3. **Portraits** – KI-Accounts haben echte Gesichter als Profilbild, passend zum
+   Vornamen und fest pro Account.
+4. **Gezeichnete Motive** – prozedural aus dem Seed erzeugt. Sie greifen, wenn
+   kein Internet da ist oder ein Dienst nicht antwortet, und sehen nach dem
+   Neuladen exakt gleich aus.
+
+Alles aus dem Netz lässt sich unter *Einstellungen → Fotos* abschalten.
 
 ## Veröffentlichen
 
@@ -164,6 +197,9 @@ src/
     image.ts          Prozedurale Bild- und Avatarerzeugung auf Canvas
     photos.ts         Eigene Fotos verkleinern und speichern, Fotoquellen fuer KI
     db.ts             IndexedDB: Spielstand und Fotos
+    ai.ts             Anbindung an Claude (Schluessel, Budget, Fehlerbehandlung)
+    persona.ts        Beschreibt einen Account so, dass die KI ihn spielen kann
+    aiContent.ts      Bildunterschriften und Kommentare von der KI
     chat.ts           Unterhaltungen und Antwortlogik
     calls.ts          Anrufe: wer rangeht und was gesagt wird
     world.ts          Welterzeugung inkl. simulierter Vorgeschichte, in Haeppchen
@@ -171,7 +207,9 @@ src/
     persistence.ts    Speichern im Browser (mit Notfall-Verkleinerung)
   ui/                 Ansichten und Komponenten
     nav.ts            Ansichtsstapel, gekoppelt an die Browser-Historie
-    Media.tsx         Fotos, gezeichnete Bilder und Avatare an einer Stelle
+    Media.tsx         Fotos, Videos, gezeichnete Bilder und Avatare an einer Stelle
+    Reels.tsx         Senkrechter Videobereich
+    Call.tsx          Anrufbildschirm mit Spracheingabe und -ausgabe
 public/
   manifest.webmanifest, sw.js, icons/   Alles, was die App installierbar macht
 ```

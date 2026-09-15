@@ -1,3 +1,5 @@
+import { ask } from './ai';
+import { chatSystemPrompt } from './persona';
 import { NICHES } from './niches';
 import { chance, clamp, pick, randInt, rngFrom, type Rng } from './rng';
 import { followerCount } from './scoring';
@@ -81,9 +83,40 @@ export function sendMessage(world: World, threadId: string, text: string) {
   const willAnswer = chance(rng, clamp(0.95 - reach * 0.55 + closenessOf(world, partner.id) * 0.4, 0.15, 0.98));
   if (!willAnswer) return;
 
-  thread.pendingReply = replyTo(rng, world, partner, clean);
   // Zwischen zwei und zehn Sekunden - lang genug, um echt zu wirken.
   thread.replyAtReal = Date.now() + randInt(rng, 2000, 9000) + Math.round(reach * 6000);
+  thread.pendingReply = undefined;
+  thread.aiWaitUntil = Date.now() + 30000;
+
+  // Zuerst die echte KI fragen. Klappt das nicht, schreiben die Bausteine.
+  const fallback = () => replyTo(rng, world, partner, clean);
+  void askPartner(world, thread.id, partner.id).then((answer) => {
+    const current = world.threads[thread.id];
+    if (!current || current.pendingReply) return;
+    current.pendingReply = answer ?? fallback();
+  });
+}
+
+/** Fragt die echte KI nach einer Antwort in der Rolle des Accounts. */
+async function askPartner(world: World, threadId: string, accountId: string): Promise<string | null> {
+  const thread = world.threads[threadId];
+  const partner = world.accounts[accountId];
+  if (!thread || !partner) return null;
+
+  const history = thread.messages
+    .filter((m) => !m.call)
+    .slice(-12)
+    .map((m) => ({ role: (m.fromUser ? 'user' : 'assistant') as 'user' | 'assistant', content: m.text }));
+  if (history.length === 0 || history[0].role !== 'user') {
+    history.unshift({ role: 'user', content: 'Hey!' });
+  }
+
+  const answer = await ask({
+    system: chatSystemPrompt(world, partner),
+    messages: history,
+    maxTokens: 300,
+  });
+  return answer ? answer.replace(/^["„]|["“]$/g, '').trim().slice(0, 500) : null;
 }
 
 /**
@@ -95,8 +128,17 @@ export function processChatReplies(world: World): boolean {
   let changed = false;
   for (const id of world.threadOrder) {
     const thread = world.threads[id];
-    if (!thread?.replyAtReal || !thread.pendingReply) continue;
+    if (!thread?.replyAtReal) continue;
     if (now < thread.replyAtReal) continue;
+    if (!thread.pendingReply) {
+      // Die KI antwortet nicht mehr - Gespraech nicht haengen lassen.
+      if (thread.aiWaitUntil && now > thread.aiWaitUntil) {
+        thread.replyAtReal = undefined;
+        thread.aiWaitUntil = undefined;
+        changed = true;
+      }
+      continue;
+    }
 
     thread.messages.push({
       id: `m${world.counter++}`,
@@ -109,6 +151,7 @@ export function processChatReplies(world: World): boolean {
     thread.unread = true;
     thread.replyAtReal = undefined;
     thread.pendingReply = undefined;
+    thread.aiWaitUntil = undefined;
     changed = true;
   }
   return changed;
@@ -131,6 +174,11 @@ const COMPLIMENT = /\b(toll|super|stark|mega|schoen|schön|liebe|gut|klasse|geil
 const COLLAB = /\b(kollab|zusammen|gemeinsam|kooperation|projekt|feature|shooting|drehen)\b/i;
 const MEET = /\b(treffen|kaffee|date|vorbei|besuch|sehen)\b/i;
 const HELP = /\b(tipp|rat|hilf|wie machst du|anfang|start)\b/i;
+const NAME_Q = /\b(wie heisst du|wie heißt du|dein name|wer bist du|name\?)/i;
+const AGE_Q = /\b(wie alt|dein alter|geburtstag)\b/i;
+const PLACE_Q = /\b(woher|wo wohnst|wo lebst|welche stadt|wo bist du)\b/i;
+const JOB_Q = /\b(was machst du|beruf|arbeitest du|job|studierst)\b/i;
+const MOOD_Q = /\b(wie geht|alles gut|wie laeuft|wie läuft)\b/i;
 const NEGATIVE = /\b(dumm|blöd|bloed|hass|schlecht|langweilig|fake)\b/i;
 
 /** Baut eine Antwort, die zum Gegenueber und zur Nachricht passt. */
@@ -140,6 +188,33 @@ function replyTo(rng: Rng, world: World, partner: Account, text: string): string
   const close = closenessOf(world, partner.id);
   const user = world.accounts[world.user.accountId];
   const followers = followerCount(user);
+
+  // Direkte Fragen zur Person zuerst - hier fiel frueher die Antwort daneben.
+  if (NAME_Q.test(text)) {
+    const first = partner.name.split(' ')[0];
+    return pick(rng, [
+      `Ich bin ${partner.name}. Und du?`,
+      `${first} - aber die meisten kennen mich nur als @${partner.handle}.`,
+      `${partner.name}. Freut mich!`,
+    ]);
+  }
+  if (AGE_Q.test(text)) {
+    const age = 19 + (Math.abs(partner.avatar.seed) % 22);
+    return pick(rng, [`Ich bin ${age}. Wieso, wie alt haettest du geschaetzt?`, `${age} - fuehlt sich manchmal aelter an 😄`]);
+  }
+  if (PLACE_Q.test(text)) {
+    const city = pick(rng, ['Berlin', 'Hamburg', 'Koeln', 'Leipzig', 'Muenchen', 'Wien', 'Zuerich', 'Stuttgart', 'Bremen']);
+    return pick(rng, [`Ich wohne in ${city}. Und du?`, `${city}, seit ein paar Jahren schon.`]);
+  }
+  if (JOB_Q.test(text)) {
+    return pick(rng, [
+      `Hauptsaechlich ${niche.label} - das frisst inzwischen den ganzen Tag.`,
+      `Nebenbei arbeite ich noch, aber ${niche.label} ist das, was mich wirklich interessiert.`,
+    ]);
+  }
+  if (MOOD_Q.test(text)) {
+    return pick(rng, ['Ganz gut soweit! Bei dir?', 'Viel zu tun, aber im guten Sinne. Und bei dir?', 'Heute eher durchwachsen, ehrlich gesagt.']);
+  }
 
   if (NEGATIVE.test(text)) {
     return pick(rng, [
@@ -217,6 +292,29 @@ function replyTo(rng: Rng, world: World, partner: Account, text: string): string
         'Danke fuer die Nachricht.',
       ];
   return pick(rng, general);
+}
+
+/**
+ * Antwort waehrend eines Telefonats. Nutzt dieselbe Rolle wie der Chat,
+ * aber im Ton eines gesprochenen Gespraechs.
+ */
+export async function askCallReply(
+  world: World,
+  accountId: string,
+  history: { role: 'user' | 'assistant'; content: string }[],
+): Promise<string | null> {
+  const partner = world.accounts[accountId];
+  if (!partner) return null;
+  const messages = history.slice(-10);
+  if (messages.length === 0 || messages[0].role !== 'user') {
+    messages.unshift({ role: 'user', content: '(nimmt den Anruf an)' });
+  }
+  const answer = await ask({
+    system: chatSystemPrompt(world, partner, true),
+    messages,
+    maxTokens: 200,
+  });
+  return answer ? answer.replace(/^["„]|["“]$/g, '').trim() : null;
 }
 
 /** Notiz ueber ein gefuehrtes oder verpasstes Gespraech. */
