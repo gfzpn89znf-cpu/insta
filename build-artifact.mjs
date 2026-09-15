@@ -6,9 +6,20 @@
 import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
 
 const SCRATCH = '/tmp/claude-0/-home-user-insta/f8f5aa06-6a22-553d-97bf-8844ef924aa4/scratchpad';
-const dir = 'dist/assets';
-const jsFile = readdirSync(dir).find((f) => f.endsWith('.js'));
-const cssFile = readdirSync(dir).find((f) => f.endsWith('.css'));
+const dir = 'dist-artifact/assets';
+const jsFiles = readdirSync(dir).filter((f) => f.endsWith('.js'));
+const cssFiles = readdirSync(dir).filter((f) => f.endsWith('.css'));
+
+// Der Einzeldatei-Build darf genau eine JS- und eine CSS-Datei erzeugen.
+// Mehrere hiessen: etwas wurde abgespalten und wuerde in der Vorschau fehlen.
+if (jsFiles.length !== 1 || cssFiles.length !== 1) {
+  throw new Error(
+    `Erwartet je eine JS- und CSS-Datei, gefunden: ${jsFiles.length} JS, ${cssFiles.length} CSS. ` +
+      'Bitte "npm run build:single" verwenden.',
+  );
+}
+const jsFile = jsFiles[0];
+const cssFile = cssFiles[0];
 
 const shell = readFileSync(`${SCRATCH}/shell.html`, 'utf8');
 const css = readFileSync(`${dir}/${cssFile}`, 'utf8');

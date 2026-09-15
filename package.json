@@ -11,7 +11,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "build:single": "npm run build && node build-artifact.mjs"
+    "build:single": "tsc -b && vite build --config vite.artifact.config.ts && node build-artifact.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",
